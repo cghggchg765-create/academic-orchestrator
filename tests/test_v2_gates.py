@@ -178,6 +178,7 @@ class DataLineageTest(Base):
         scr = h(self.project / "transform" / "t.txt")
         return {
             "schema_version": "data-lineage/1.0", "project_id": "t",
+            "generated_at": "2026-01-01T00:00:00Z",
             "raw": {"files": [{"path": "Data/raw/src.csv", "sha256": raw, "rows": 2, "cols": 2,
                                "data_class": "contest_provided"}]},
             "stages": [{

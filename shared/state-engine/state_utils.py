@@ -305,8 +305,10 @@ def main():
     p.set_defaults(func=lambda a: (refresh_dashboard(os.path.abspath(a.dir)),
                                    print(f"[state_utils] dashboard-refresh: {os.path.abspath(a.dir)}")))
 
-    p = sub.add_parser("claim", help="写子 Agent 租约（含 ttl 检查）")
+    p = sub.add_parser("claim", help="写子 Agent 租约（同 agent 重复认领与跨 agent 占用都拒绝）")
     p.add_argument("agent_id"); p.add_argument("--node", required=True); p.add_argument("--dir", default=".")
+    p.add_argument("--ttl", type=int, default=3600, help="租约有效期秒数（默认 3600）")
+    p.add_argument("--force", action="store_true", help="抢占其他 Agent 的有效租约（会留痕）")
     p.set_defaults(func=cmd_claim)
 
     p = sub.add_parser("node-log", help="记录节点执行小步骤（追加 state/nodes/<name>/steps.md，时间线留痕）")

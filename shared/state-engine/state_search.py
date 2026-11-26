@@ -111,31 +111,81 @@ def cmd_search_evidence(args):
           f" 执行 {NODES[node]['executor']} / 审阅 {NODES[node]['reviewer'] or '-'}（禁止纯内生）")
 
 
+def _active_claims_for_node(root, node, exclude_agent=None):
+    """扫描 state/agents/*/claim.json，返回该节点上未过期且属于其他 agent 的租约。
+
+    2.0.0 修复：原实现只读自己 agent 的 claim.json，导致两个不同 agent 可同时
+    认领同一节点（"防重复派发"实际失效）。改为跨 agent 扫描。
+    """
+    agents_dir = os.path.join(root, STATE_DIR, "agents")
+    active = []
+    if not os.path.isdir(agents_dir):
+        return active
+    for name in os.listdir(agents_dir):
+        if exclude_agent and name == exclude_agent:
+            continue
+        path = os.path.join(agents_dir, name, "claim.json")
+        if not os.path.isfile(path):
+            continue
+        try:
+            c = json.loads(open(path, encoding="utf-8").read())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if c.get("node") != node:
+            continue
+        try:
+            claimed = datetime.fromisoformat(str(c["claimed_at"]).replace("Z", "+00:00"))
+        except (ValueError, KeyError):
+            continue
+        ttl = c.get("ttl_s", 3600)
+        if (datetime.now(timezone.utc) - claimed).total_seconds() < ttl:
+            active.append({"agent": c.get("agent_id", name), "claimed_at": c.get("claimed_at"),
+                           "ttl_s": ttl, "round": c.get("round")})
+    return active
+
+
 def cmd_claim(args):
     root = os.path.abspath(args.dir)
     require_node(args.node)
     state = load_state(root)
     node = args.node
+    ttl = int(getattr(args, "ttl", 3600) or 3600)
     claim_dir = os.path.join(root, STATE_DIR, "agents", args.agent_id)
     claim_path = os.path.join(claim_dir, "claim.json")
+
+    # ① 同一 agent 重复认领同一节点：未过期则拒绝
     old = load_json(claim_path)
-    if old:
+    if old and old.get("node") == node:
         try:
-            claimed = datetime.fromisoformat(old["claimed_at"].replace("Z", "+00:00"))
-            ttl = old.get("ttl_s", 3600)
-            if (datetime.now(timezone.utc) - claimed).total_seconds() < ttl:
-                sys.exit(f"[state_utils] 节点 {node} 已有租约（{old.get('agent_id')} 于 {old['claimed_at']} 认领，ttl={ttl}s），拒绝重复派发")
+            claimed = datetime.fromisoformat(str(old["claimed_at"]).replace("Z", "+00:00"))
+            old_ttl = old.get("ttl_s", 3600)
+            if (datetime.now(timezone.utc) - claimed).total_seconds() < old_ttl:
+                sys.exit(f"[state_utils] 节点 {node} 你已有有效租约（{old.get('claimed_at')} 认领，"
+                         f"ttl={old_ttl}s），拒绝重复认领。如需续期请先等过期或换节点。")
         except (ValueError, KeyError):
             pass
+
+    # ② 跨 agent 互斥：该节点已被其他 agent 占用（未过期）→ 拒绝
+    others = _active_claims_for_node(root, node, exclude_agent=args.agent_id)
+    if others and not getattr(args, "force", False):
+        detail = "; ".join(f"{c['agent']}@{c['claimed_at']}(ttl={c['ttl_s']}s)" for c in others)
+        sys.exit(f"[state_utils] 节点 {node} 已被其他 Agent 认领，拒绝重复派发：{detail}\n"
+                 f"  如确认对方已失联，可加 --force 抢占（会在 rounds 留痕）。")
+
     rounds = [r for r in state["rounds"] if r.get("node") == node and r.get("status") == "in_progress"]
     round_no = rounds[-1]["round"] if rounds else None
     claim = {"agent_id": args.agent_id, "node": node, "round": round_no,
-             "claimed_at": now_iso(), "ttl_s": 3600}
+             "claimed_at": now_iso(), "ttl_s": ttl}
+    if others:
+        claim["preempted"] = [c["agent"] for c in others]
     save_json_atomic(claim_path, claim)
     if rounds:
-        rounds[-1].setdefault("agent_claims", []).append({"agent": args.agent_id, "claimed_at": now_iso()})
+        rounds[-1].setdefault("agent_claims", []).append(
+            {"agent": args.agent_id, "claimed_at": now_iso(),
+             **({"preempted": claim["preempted"]} if others else {})})
         save_state(root, state)
-    print(f"[state_utils] claim: {args.agent_id} @ {node} round={round_no}")
+    print(f"[state_utils] claim: {args.agent_id} @ {node} round={round_no} ttl={ttl}s"
+          + (f"（抢占 {claim['preempted']}）" if others else ""))
 
 def cmd_dr_note(args):
     """登记一次 Deep Research 介入（Deep Research 链嵌入迭代环的可审计留痕）。

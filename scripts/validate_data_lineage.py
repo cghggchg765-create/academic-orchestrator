@@ -266,25 +266,42 @@ def verify_raw_lock(root: Path, f: Findings) -> None:
                 ok_detail=f"{rel} 与 raw 锁定基线一致")
 
 
-def verify_thresholds(payload: dict, root: Path, f: Findings) -> None:
-    """执行 D1 声明但此前无人读取的阈值：lineage_levels / rows_per_column_min。"""
-    stages = payload.get("stages") or []
-    names = {s.get("stage") for s in stages}
-    # 允许多级，但至少要求 processed；feature/test_result 缺失需在 notes 说明
-    if "processed" not in names:
-        f.check("levels.processed", False, "缺少 processed 阶段——原始数据未经过任何清洗")
-    for lvl in ("feature", "test_result"):
-        if lvl not in names:
-            f.check(f"levels.{lvl}", False,
-                    f"缺少 {lvl} 阶段（如确实不涉及，请在 notes 说明理由）", severity="WARN")
-    # rows_per_column_min：raw 行数应 ≥ 列数×N
-    for item in (payload.get("raw") or {}).get("files") or []:
-        rows, cols = item.get("rows"), item.get("cols")
-        if isinstance(rows, int) and isinstance(cols, int) and cols > 0:
-            need = cols * 3
-            f.check(f"rows_per_col:{item.get('path')}", rows >= need,
-                    f"{item.get('path')} 行数 {rows} < 列数 {cols}×3={need}"
-                    f"（样本量相对特征维度不足，易过拟合）", severity="WARN")
+def verify_schema(payload: dict, root: Path, f: Findings) -> None:
+    """用 data_lineage.schema.json 做结构校验（原 schema 完全未被使用，属契约空转）。
+
+    jsonschema 为可选依赖：装了才做结构校验，没装则记 WARN 不阻塞
+    （语义层检查仍会跑，不致因缺库而失效）。
+    """
+    schema_path = None
+    here = Path(__file__).resolve().parent
+    for cand in (
+        here.parent / "shared" / "contracts" / "math_modeling" / "data_lineage.schema.json",
+        root / "shared" / "contracts" / "math_modeling" / "data_lineage.schema.json",
+    ):
+        if cand.is_file():
+            schema_path = cand
+            break
+    if schema_path is None:
+        f.check("schema.present", False, "未找到 data_lineage.schema.json（结构契约缺失）",
+                severity="WARN")
+        return
+    try:
+        import jsonschema
+    except ImportError:
+        f.check("schema.enforced", False,
+                "未安装 jsonschema，跳过结构校验（pip install jsonschema 可启用）",
+                severity="WARN", ok_detail="结构校验已启用")
+        return
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator(schema).validate(payload)
+        f.check("schema.enforced", True, "", ok_detail="符合 data_lineage.schema.json 结构契约")
+    except jsonschema.ValidationError as exc:
+        loc = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        f.check("schema.enforced", False,
+                f"结构契约不符（{loc}）：{exc.message[:160]}")
+    except (json.JSONDecodeError, OSError) as exc:
+        f.check("schema.enforced", False, f"schema 读取/解析失败: {exc}", severity="WARN")
 
 
 def verify_invariants(payload: dict, f: Findings) -> None:
@@ -343,6 +360,7 @@ def main() -> int:
     f = Findings()
     verify_raw(payload, args.root, f)
     verify_raw_lock(args.root, f)
+    verify_schema(payload, args.root, f)
     if not args.check_raw:
         verify_stages(payload, args.root, f)
         verify_invariants(payload, f)

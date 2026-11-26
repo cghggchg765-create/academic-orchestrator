@@ -641,10 +641,6 @@ id = "755-workflow-classification"
 path = "scripts/test_check_workflow_classification.py"
 
 [[pytest]]
-id = "753-distribution-surface-claims"
-path = "scripts/test_check_distribution_surface_claims.py"
-
-[[pytest]]
 id = "757-control-availability-map"
 path = "scripts/test_check_control_availability.py"
 

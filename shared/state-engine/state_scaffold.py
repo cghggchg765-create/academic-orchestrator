@@ -839,21 +839,63 @@ def cmd_stage_set(args):
     print(f"[state_utils] stage {args.key} -> {args.status}")
 
 
+def _load_gate_registry():
+    """读门禁登记表（shared/contracts/gates-registry.json），返回 {id: gate_obj}。
+
+    运行时以注册表为准，避免"新增门禁后 gate-set 防伪出现缺口而 lint 不报"。
+    找不到注册表时退回内置集合（fail-safe，保持既有行为）。
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    for cand in (
+        os.path.join(os.path.dirname(os.path.dirname(here)), "shared", "contracts", "gates-registry.json"),
+        os.path.join(here, "..", "..", "contracts", "gates-registry.json"),
+    ):
+        p = os.path.abspath(cand)
+        if os.path.isfile(p):
+            try:
+                gates = json.loads(open(p, encoding="utf-8").read()).get("gates", [])
+                return {g["id"]: g for g in gates if g.get("id")}
+            except (OSError, json.JSONDecodeError, KeyError):
+                break
+    return {}
+
+
 def cmd_gate_set(args):
     root = os.path.abspath(args.dir)
     state = load_state(root)
-    # 2.0.0 防伪造：review 类门禁（由独立审阅 Agent 判定）禁止用 gate-set 直写 PASS。
-    # 否则可绕过 node-review 的 required_skills / 血缘 / MCP 留痕校验，直接伪造"通过"。
-    REVIEW_KIND_GATES = {"M1", "D1", "P1", "P2", "T1", "V1", "B1", "W2", "A3"}
-    if args.gate in REVIEW_KIND_GATES and str(args.status).upper() == "PASS":
+    registry = _load_gate_registry()
+    # ① 合法性：gate id 必须存在于登记表（或为迭代动态门禁 S<n>-<Nx>）
+    is_iteration = str(args.gate).startswith("S") and "-" in str(args.gate)
+    if registry and args.gate not in registry and not is_iteration:
         sys.exit(
-            f"[state_utils] 拒绝：{args.gate} 是审阅类门禁，不能用 gate-set 直接置 PASS。\n"
-            f"  正确做法：由配对审阅 Agent 执行\n"
-            f"    python state/state_utils.py node-review <Nx> --agent <审阅Agent> "
-            f"--result PASS --skills \"<必读skill>\" --summary \"...\" --evidence \"<证据路径>\"\n"
-            f"  该命令会自动校验必读 Skill、数据血缘（N2）、MCP 检索留痕（核心节点）后才落门禁。\n"
-            f"  若确属离线/人工特批，请用 node-review 的 --allow-missing-* 豁免并在交付说明中留痕。"
+            f"[state_utils] 拒绝：未知门禁 id '{args.gate}'。\n"
+            f"  合法门禁: {', '.join(sorted(registry))}\n"
+            f"  迭代动态门禁形如 S<n>-<N4>。\n"
+            f"  新增门禁请先登记 shared/contracts/gates-registry.json（单一事实源）。"
         )
+    kind = (registry.get(args.gate) or {}).get("kind")
+    # ② 类型约束：review 类不可直写 PASS（须走 node-review）；human 类须走 h-confirm；
+    #    auto 类由脚本内部写（round-score 等），也不允许外部伪造 PASS。
+    if str(args.status).upper() == "PASS":
+        if kind == "review" or (not registry and args.gate in
+                                {"M1", "D1", "P1", "P2", "T1", "V1", "B1", "W2", "A3"}):
+            sys.exit(
+                f"[state_utils] 拒绝：{args.gate} 是审阅类门禁，不能用 gate-set 直接置 PASS。\n"
+                f"  正确做法：由配对审阅 Agent 执行\n"
+                f"    python state/state_utils.py node-review <Nx> --agent <审阅Agent> "
+                f"--result PASS --skills \"<必读skill>\" --summary \"...\" --evidence \"<证据路径>\"\n"
+                f"  该命令会自动校验必读 Skill、数据血缘（N2）、MCP 检索留痕（核心节点）后才落门禁。"
+            )
+        if kind == "human":
+            sys.exit(
+                f"[state_utils] 拒绝：{args.gate} 是人工门禁，请用 h-confirm 追认：\n"
+                f"    python state/state_utils.py h-confirm --gate {args.gate} --by <确认人>"
+            )
+        if kind == "auto":
+            sys.exit(
+                f"[state_utils] 拒绝：{args.gate} 是自动门禁，只能由对应命令内部写入"
+                f"（如 round-score），不允许外部置 PASS。"
+            )
     gate = state["gates"].setdefault(args.gate, {"status": "pending"})
     gate["status"] = args.status
     if args.agent:
