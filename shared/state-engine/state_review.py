@@ -3,6 +3,64 @@ from state_defs import *  # noqa: F401,F403
 from state_scaffold import *  # noqa: F401,F403
 from state_audit import *  # noqa: F401,F403
 
+def require_b1_evidence(root, node, agent, evidence):
+    """B1 门禁专项校验（P1-2）。
+
+    原实现只要求声明的 skills，不检查任何对标产物 → 无反差矩阵也能 PASS。
+    现在要求：
+      1. state/reports/figure-table-benchmark/ 下有矩阵文件；
+      2. 该文件能解析，且 entries 非空、每条有 verdict；
+      3. 无 GAP_MAJOR/BLOCKED（有则 FAIL，不放行）。
+    """
+    bdir = os.path.join(root, "state", "reports", "figure-table-benchmark")
+    if not os.path.isdir(bdir):
+        sys.exit(
+            "[state_utils] 拒绝 B1 PASS：缺少对标矩阵目录 state/reports/figure-table-benchmark/。\n"
+            "  B1 要求先检索 ≥3 篇同领域论文并产出实测规格矩阵，格式见\n"
+            "    skills/figure-table-benchmark/references/benchmark-matrix.schema.json\n"
+            "  再执行 node-review ... --result PASS --evidence <矩阵路径>"
+        )
+    candidates = []
+    if evidence:
+        p = evidence if os.path.isabs(evidence) else os.path.join(root, evidence)
+        if os.path.isfile(p):
+            candidates.append(p)
+    if not candidates:
+        for f in sorted(os.listdir(bdir)):
+            if f.endswith(".json"):
+                candidates.append(os.path.join(bdir, f))
+    if not candidates:
+        sys.exit("[state_utils] 拒绝 B1 PASS：对标矩阵目录下没有任何 .json 矩阵文件。")
+
+    latest = max(candidates, key=os.path.getmtime)
+    try:
+        data = json.loads(open(latest, encoding="utf-8").read())
+    except (OSError, json.JSONDecodeError) as exc:
+        sys.exit(f"[state_utils] 拒绝 B1 PASS：对标矩阵无法解析（{latest}）：{exc}")
+
+    entries = data.get("entries") or []
+    if not entries:
+        sys.exit(f"[state_utils] 拒绝 B1 PASS：矩阵 {os.path.basename(latest)} 的 entries 为空。")
+    bad = []
+    for e in entries:
+        verdict = (e or {}).get("verdict")
+        if verdict in {"GAP_MAJOR", "BLOCKED"}:
+            bad.append(f"{e.get('artifact_id', '?')}={verdict}")
+        elif not verdict:
+            bad.append(f"{e.get('artifact_id', '?')}=<缺 verdict>")
+    if bad:
+        sys.exit("[state_utils] 拒绝 B1 PASS：存在未达标的对标条目："
+                 + ", ".join(bad[:8])
+                 + ("…" if len(bad) > 8 else "")
+                 + "\n  先回传 visualization/writing 补齐，再重新对标。")
+    # 对标论文数（可选字段）：不足 3 篇不给 PASS
+    for e in entries:
+        n = len((e or {}).get("benchmarked") or [])
+        if n < 3:
+            sys.exit(f"[state_utils] 拒绝 B1 PASS：条目 {e.get('artifact_id','?')} 只对标了 {n} 篇，"
+                     f"要求 ≥3 篇同领域论文。")
+
+
 def cmd_node_review(args):
     root = os.path.abspath(args.dir)
     require_node(args.node)
@@ -34,6 +92,9 @@ def cmd_node_review(args):
         gate_id = SECONDARY_REVIEWER_GATE.get(args.agent)
     else:
         gate_id = REVIEW_GATE.get(node)
+    # P1-2：B1 的 PASS 必须有实测对标矩阵支撑，不能只靠声明的 skills。
+    if gate_id == "B1" and args.result == "PASS":
+        require_b1_evidence(root, node, args.agent, args.evidence or "")
     if gate_id:
         gate = state["gates"].setdefault(gate_id, {"status": "pending"})
         prev_status = gate.get("status", "pending")

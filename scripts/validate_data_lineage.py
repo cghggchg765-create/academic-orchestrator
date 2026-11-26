@@ -23,7 +23,26 @@ import json
 import sys
 from pathlib import Path
 
-REQUIRED_TOP = ("schema_version", "project_id", "raw", "stages", "invariants")
+# 必填字段（P1-13）：以 schema 的 required 为唯一事实源，不在校验器里维护副本。
+# 找不到 schema 时才退回这里的兜底集合（与 schema 保持一致）。
+REQUIRED_TOP_FALLBACK = ("schema_version", "project_id", "generated_at",
+                         "raw", "stages", "invariants")
+
+
+def _required_top(root: Path) -> tuple:
+    """从 data_lineage.schema.json 的 required 读取必填字段。"""
+    for cand in (
+        Path(__file__).resolve().parent.parent / "shared" / "contracts" / "math_modeling" / "data_lineage.schema.json",
+        root / "shared" / "contracts" / "math_modeling" / "data_lineage.schema.json",
+    ):
+        if cand.is_file():
+            try:
+                req = json.loads(cand.read_text(encoding="utf-8")).get("required")
+                if isinstance(req, list) and req:
+                    return tuple(req)
+            except (OSError, json.JSONDecodeError):
+                pass
+    return REQUIRED_TOP_FALLBACK
 STAGE_ORDER = ["processed", "feature", "test_result"]
 
 
@@ -113,6 +132,18 @@ def verify_environment_lock(payload: dict, root: Path, f: Findings) -> None:
             ok_detail=f"环境锁 {rel} 与登记一致")
 
 
+def _norm_path(p: str) -> str:
+    """路径归一化（P1-16）：统一分隔符 + 小写。
+
+    Windows 上 `Data\\raw\\a.csv` 与 `Data/raw/a.csv` 是同一文件，但字典键精确匹配
+    会判成"血缘断裂"。统一 as_posix + casefold（Windows 文件系统大小写不敏感）。
+    """
+    s = str(p).replace("\\", "/").strip()
+    while "//" in s:
+        s = s.replace("//", "/")
+    return s.casefold()
+
+
 def verify_raw(payload: dict, root: Path, f: Findings) -> None:
     """raw 只读性：磁盘哈希必须等于登记哈希；登记的行列数需与实际一致。"""
     files = (payload.get("raw") or {}).get("files") or []
@@ -155,10 +186,11 @@ def verify_stages(payload: dict, root: Path, f: Findings) -> None:
             f"处理阶段顺序错误: {names}（应为 {STAGE_ORDER} 的子序列且递增）",
             ok_detail=f"处理阶段顺序正确: {names}")
 
-    # 链式连续性：prev_outputs 的 {path, sha256} 必须覆盖本 stage 的每个 input
+    # 链式连续性：prev_outputs 的 {path, sha256} 必须覆盖本 stage 的每个 input。
+    # 键统一走 _norm_path（P1-16），避免 `Data\raw\a.csv` 与 `Data/raw/a.csv` 被当成两个文件。
     prev_outputs: dict[str, str] = {}
     for item in (payload.get("raw") or {}).get("files") or []:
-        prev_outputs[item.get("path", "")] = (item.get("sha256") or "").lower()
+        prev_outputs[_norm_path(item.get("path", ""))] = (item.get("sha256") or "").lower()
     prev_label = "raw"
 
     for st in stages:
@@ -166,12 +198,13 @@ def verify_stages(payload: dict, root: Path, f: Findings) -> None:
         # 输入必须来自上一级
         for inp in st.get("inputs") or []:
             p = inp.get("path", "")
+            key = _norm_path(p)
             want = (inp.get("sha256") or "").lower()
-            if p not in prev_outputs:
+            if key not in prev_outputs:
                 f.check(f"chain.{name}.input:{p}", False,
                         f"{name} 的输入 {p} 不在上一级({prev_label})产物中——数据血缘断裂")
                 continue
-            got = prev_outputs[p]
+            got = prev_outputs[key]
             f.check(f"chain.{name}.input_sha:{p}", got == want,
                     f"{name} 输入 {p} 哈希与上一级不符：上级 {got[:12]}… 本级声明 {want[:12]}…",
                     ok_detail=f"{name} 输入 {p} 与上级 {prev_label} 哈希一致")
@@ -212,14 +245,27 @@ def verify_stages(payload: dict, root: Path, f: Findings) -> None:
 
         # 产物存在且哈希匹配；行列数需与登记一致
         outs: dict[str, str] = {}
-        prev_rows = None
+        # P1-15：prev_rows 必须按本 stage 的某个具体 input 精确定位，
+        # 不能取"上一 stage 最后一个 output"（多 output 时基准错位，
+        # 会让合法台账被误判 FAIL）。建立 path → rows 索引后按 input 查。
+        prev_rows_by_path: dict[str, int] = {}
         for item in (payload.get("raw") or {}).get("files") or []:
-            if prev_rows is None and isinstance(item.get("rows"), int):
-                prev_rows = item["rows"]
+            if isinstance(item.get("rows"), int):
+                prev_rows_by_path[_norm_path(item.get("path", ""))] = item["rows"]
         for st_prev in stages[:stages.index(st)]:
             for o in st_prev.get("outputs") or []:
                 if isinstance(o.get("rows"), int):
-                    prev_rows = o["rows"]
+                    prev_rows_by_path[_norm_path(o.get("path", ""))] = o["rows"]
+        # 本 stage 各 input 的 rows（取有 rows 的第一个作为 diff 基准）
+        prev_rows = None
+        for inp in st.get("inputs") or []:
+            r = prev_rows_by_path.get(_norm_path(inp.get("path", "")))
+            if isinstance(r, int):
+                prev_rows = r
+                break
+        if prev_rows is None and len(prev_rows_by_path) == 1:
+            # 只有一个上游产物时，它是唯一合理基准
+            prev_rows = next(iter(prev_rows_by_path.values()))
         for out in st.get("outputs") or []:
             rel = out.get("path", "")
             full = root / rel
@@ -231,7 +277,7 @@ def verify_stages(payload: dict, root: Path, f: Findings) -> None:
             f.check(f"output.sha:{name}:{rel}", actual == declared,
                     f"{name} 产物 {rel} 哈希不符：登记 {declared[:12]}… 实际 {actual[:12]}…",
                     ok_detail=f"{name} 产物 {rel} 哈希与登记一致")
-            outs[rel] = actual
+            outs[_norm_path(rel)] = actual
             # 行/列数与磁盘一致性
             rows = _count_rows(full)
             if rows is not None and isinstance(out.get("rows"), int) and rows != out["rows"]:
@@ -376,7 +422,7 @@ def main() -> int:
         print(f"血缘台账 JSON 无效: {exc}", file=sys.stderr)
         return 2
 
-    missing = [k for k in REQUIRED_TOP if k not in payload]
+    missing = [k for k in _required_top(args.root) if k not in payload]
     if missing:
         print(f"血缘台账缺少必填字段: {missing}", file=sys.stderr)
         return 2

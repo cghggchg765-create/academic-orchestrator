@@ -789,7 +789,7 @@ class WorkflowContractsTest(unittest.TestCase):
         # 上游未审阅（M1 pending）→ N2 不可开工
         r = self.run_state("node-start", "N2", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("审阅门禁", r.stderr + r.stdout)
+        self.assertIn("门禁 M1=pending", r.stderr + r.stdout)
         # 审阅 PASS 后可开工，且 handoff 交接文件自动生成
         self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
                        "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--summary", "ok",
@@ -918,6 +918,30 @@ class WorkflowContractsTest(unittest.TestCase):
         self.run_state("node-review", "N6", "--agent", "mm-viz-reviewer", "--result", "PASS",
                        "--skills", "academic-orchestrator:mm-visualization,academic-orchestrator:mm-iteration-engine,academic-orchestrator:figure-table-benchmark",
                        "--summary", "ok", "--evidence", "ResultFigures/figure-list.md", "--dir", str(self.project))
+        # 2.0.0（P1-1）：N6 的全部门禁（含 B1）都必须 PASS，否则 N7 无法开工。
+        # B1 需要实测对标矩阵，这里造一份合规的。
+        bdir = self.project / "state" / "reports" / "figure-table-benchmark"
+        bdir.mkdir(parents=True, exist_ok=True)
+        matrix = {
+            "schema_version": "figure-table-benchmark/1.0", "project_id": "t",
+            "node": "N6", "round": 1,
+            "entries": [{
+                "artifact_id": "fig-1", "artifact_kind": "figure", "supported_claim": "c",
+                "our_spec": {}, "verdict": "COMPLETE",
+                "benchmarked": [{"paper_id": f"p{i}", "year": 2024, "locator": "p1",
+                                 "channel": "paper-mcp"} for i in range(3)],
+                "dimensions": {k: {"state": "PASS", "evidence": "e"} for k in
+                               ("data_columns", "statistics", "units", "comparability",
+                                "grouping", "chart_fit", "academic_form")},
+                "gaps": [],
+            }],
+        }
+        (bdir / "N6_1.json").write_text(json.dumps(matrix, ensure_ascii=False), encoding="utf-8")
+        self.run_state("node-review", "N6", "--agent", "mm-figure-table-benchmarker", "--result", "PASS",
+                       "--skills", "figure-table-benchmark,mm-iteration-engine",
+                       "--summary", "对标完成",
+                       "--evidence", "state/reports/figure-table-benchmark/N6_1.json",
+                       "--allow-missing-mcp", "--dir", str(self.project))
         self.run_state("node-start", "N7", "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
         self.assertEqual(state["gates"]["W1"]["status"], "PASS")

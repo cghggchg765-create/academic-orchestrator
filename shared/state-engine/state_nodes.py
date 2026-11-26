@@ -45,12 +45,19 @@ def cmd_node_start(args):
             up_status = state["nodes"].get(up_node, {}).get("status", "pending")
             if up_status != "completed":
                 missing.append(f"上游节点 {up_node}({up_name}) 状态为 {up_status}，需要 completed")
-            # 上游审阅门禁校验（防"阶段不完全/修改不完善就进下一步"）：上游必须已通过独立审阅循环
-            up_gate = REVIEW_GATE.get(up_node)
-            if up_gate:
+            # 上游审阅门禁校验（防"阶段不完全/修改不完善就进下一步"）：上游必须已通过独立审阅循环。
+            # P1-1：原先只查 REVIEW_GATE，B1 这类同节点附加门禁不参与推进判定 → 形同摆设。
+            # 现在遍历上游节点声明的全部门禁，任一未过都阻塞。
+            up_gates = list(NODES.get(up_node, {}).get("gates") or [])
+            if REVIEW_GATE.get(up_node) and REVIEW_GATE[up_node] not in up_gates:
+                up_gates.append(REVIEW_GATE[up_node])
+            for up_gate in up_gates:
+                # H 门禁为人工在环（advisory），不作为自动推进的硬阻塞
+                if up_gate.startswith("H"):
+                    continue
                 up_gate_status = (state["gates"].get(up_gate) or {}).get("status", "pending")
                 if up_gate_status not in {"PASS", "auto_passed", "confirmed"}:
-                    missing.append(f"上游节点 {up_node} 审阅门禁 {up_gate}={up_gate_status}"
+                    missing.append(f"上游节点 {up_node} 门禁 {up_gate}={up_gate_status}"
                                    f"（未通过/未审阅）——必须先完成'审阅→修改→再审阅'循环（PASS）再开工 {node}")
             # 检查静态 artifact 是否存在
             up_artifact = NODES.get(up_node, {}).get("artifact", "")
