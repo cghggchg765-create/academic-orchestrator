@@ -577,10 +577,23 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
                 stage["final_score"] = None
                 stage["passed"] = False
             decision_log["stages"][info["stage"]] = stage
-        for gate in ("M1", "D1", "P1", "P2", "A1", "T1", "V1", "W1", "A2", "W2", "A3"):
-            decision_log["gates"][gate] = {"status": "pending", "agent": None, "timestamp": None, "result": None}
-        for gate in ("H1", "H2", "H3"):
-            decision_log["gates"][gate] = {"status": "pending", "note": None}
+        # P1-3：门禁种子由 gates-registry.json 生成（单一事实源），不再手写清单。
+        # 原手写清单缺 B1，导致新项目里 B1 只在首次审阅时才被 setdefault 创建。
+        registry = _load_gate_registry()
+        if registry:
+            for gid, g in sorted(registry.items()):
+                if (g.get("kind") or "") == "human":
+                    decision_log["gates"][gid] = {"status": "pending", "note": None}
+                else:
+                    decision_log["gates"][gid] = {"status": "pending", "agent": None,
+                                                  "timestamp": None, "result": None}
+        else:
+            # 找不到注册表时退回内置清单（fail-safe）
+            for gate in ("M1", "D1", "P1", "P2", "A1", "T1", "V1", "B1", "W1", "A2", "W2", "A3"):
+                decision_log["gates"][gate] = {"status": "pending", "agent": None,
+                                               "timestamp": None, "result": None}
+            for gate in ("H1", "H2", "H3"):
+                decision_log["gates"][gate] = {"status": "pending", "note": None}
         save_state(root, decision_log, bump=False)
 
     if force or not os.path.exists(os.path.join(root, REGISTRY_FILE)):

@@ -620,7 +620,25 @@ def check_premature_progression(root):
     return problems
 
 
-CURRENT_SKILL_VERSION = "1.5.0"  # 与 SKILL.md frontmatter / state_scaffold init 模板同步（lint_contracts 核对）
+def _read_skill_version():
+    """P1-28：从 pyproject.toml 读取当前版本（单一事实源），避免这里的常量漂移。
+
+    原实现硬编码 1.5.0 且注释声称 lint 核对，实际 lint 里根本没有这个检查。
+    """
+    try:
+        import re as _re
+        pj = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                          "pyproject.toml")
+        with open(pj, "r", encoding="utf-8") as fh:
+            m = _re.search(r'^version\s*=\s*"([^"]+)"', fh.read(), _re.MULTILINE)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return "2.0.0"
+
+
+CURRENT_SKILL_VERSION = _read_skill_version()
 
 
 def _ver_tuple(v):

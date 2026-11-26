@@ -307,7 +307,7 @@ python state/state_utils.py review-loop <Nx> --dir .
 | N3 建模 | modeler | reviewer（节点审阅模式） | mm-model-library | P1 |
 | N4 代码/代码迭代 | coder | **mm-code-reviewer（专用）** | mm-iteration-engine + mm-algorithm-dev + code-review | P2 + A1 + H2 + S\<n\>-N4 |
 | N5 调优 | tuner | **mm-code-reviewer（专用）** | mm-model-tuning + mm-iteration-engine（审 N5 加读 mm-model-tuning） | T1 |
-| N6 图表 | visualization | **mm-viz-reviewer（专用）** | mm-visualization + mm-iteration-engine | V1 |
+| N6 图表 | visualization | **mm-viz-reviewer（专用）**；另有 mm-figure-table-benchmarker 出 B1 | mm-visualization + mm-iteration-engine + **figure-table-benchmark** | V1 + **B1** |
 | N7 论文/论文修改 | writing | reviewer（论文评审专用模式） | mm-iteration-engine + mm-latex-writing + mm-self-review | W1 + A2 + W2 + H3 + S\<n\>-N7 |
 | N8 评审 | reviewer | 终稿评审报告 + 提交清单核对（§2 豁免说明） | mm-self-review | A3 |
 
@@ -412,7 +412,7 @@ DECIDE  读 termination 决策：
 **知识卡片派发（机器入口 `search-evidence <Nx>`）**：
 - 所有核心节点 MCP 检索结果按 `mcp/knowledge-card.template.md` 沉淀为知识卡片（落 `state/reports/mcp-cards/`）、留痕 `state/reports/mcp-calls.jsonl`、文献归 `state/reports/references-ledger.md`（GB/T 7714）；
 - orchestrator 后续派发该节点（或下游节点）时，先 `python state/state_utils.py search-evidence <Nx>` 汇总该节点知识卡片/案例/台账/MCP 留痕，**随派发 prompt / handoff 分发给对应执行与审阅 Agent**，作为其外部依据（禁止纯内生）；
-- N8 终检按 `mcp/validation-checkpoints.md` 校验"五节点必调留痕 + 知识卡片 + 台账"闭环，无记录不通过。
+- N8 终检按 `mcp/validation-checkpoints.md` 校验"六节点必调留痕 + 知识卡片 + 台账"闭环，无记录不通过。
 - 🔴 **每轮介入留痕（可审计）**：N4/N5/N7 每次 Deep Research 介入（SEARCH 检索方案 / SCORE 先进性核查 / DECIDE 失败分析）执行 `dr-note <Nx> --round <n> --phase <...> --role <...> --topic <...>`，落 `state/reports/dr-interventions.jsonl` 并同步 `rounds[n].deep_research`；`dr-list <Nx> [--round n]` 查询，N8 终检可用其核对"每轮有据介入"。
 - **统一规格（SSOT）**：9 阶段协作闭环、Deep Research 嵌入点清单、迭代环融合方案的完整口径见 `docs/optimization/agent-collaboration-loop.md`（orchestrator / 主控 SKILL / 本 SKILL 均引用之）。
 
@@ -630,7 +630,7 @@ python state/state_utils.py sync-plan [--dir .]                                 
 | `ref/math_model/workflows/adversarial-review.js` | 对抗审稿聚合实现参考（≤4 轮、目标 7.5） |
 | `shared/state-engine/state_utils.py` | 状态节点 CLI 入口（薄分发层；init 时连同 `state_defs/state_scaffold/state_nodes/state_review/state_audit/state_rounds/state_search` 兄弟模块一并复制进项目 state/） |
 | `shared/contracts/gates-registry.json` | **门禁登记单一事实源**（2.0.0 新增）：全部门禁的 id/节点/时机/类型/阻断级别/判据/产出者/阈值。改门禁先改此处。 |
-| `mcp/call-hierarchy.md` | 核心节点 MCP 必调五节点表（N1/N3/N4/N5/N7，禁止纯内生） |
+| `mcp/call-hierarchy.md` | 核心节点 MCP 必调六节点表（N1/N3/N4/N5/N7，禁止纯内生） |
 | `mcp/knowledge-card.template.md` / `mcp/reference-ledger.template.md` | 检索知识卡片与 GB/T 7714 台账模板（search-evidence 派发载体） |
 | `deep-research` Skill | 迭代不达标时的自动迭代审阅与根因深度调研（按需唤起，回填下一轮 SEARCH） |
 | `mathematical-modeling/SKILL.md` | 主控 Skill（阶段表与本规范联动） |

@@ -6,7 +6,7 @@
       "name": "academic-orchestrator",
       "source": {
         "source": "directory",
-        "path": "F:\\deskop\\数学建模skills"
+        "path": "."
       },
       "description": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。23 Skill / 21 Agent / 7 命令。",
       "description_i18n": {

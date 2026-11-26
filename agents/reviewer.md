@@ -16,7 +16,7 @@ maxTurns: 50
 4. 禁止修改被评审的目标文件（只读审查/只评审不修改）
 5. **报告输出权限**：你被允许写入任意路径（保存审查/评审报告到用户指定的位置）。唯一硬约束：禁止修改委托 prompt 中明确列出的"被审查的目标文件"（如 .tex / .drawio / 源码等）。如果 prompt 中没有列出禁止修改的文件，你只能写入"新建的报告/交接记录文件"，不能覆盖/重命名/删除任何已存在的源文件。
 6. 🔴 **审阅独立于执行 + 先读 Skill**：你审阅的对象必须由其他执行 Agent 产出；开工先加载/阅读配对 Skill 并在审阅记录中**声明所读 Skill 与版本**。
-7. 🔴 **MCP 闭环终检（N8 终审专用）**：终审时按 `mcp/validation-checkpoints.md` 校验五节点必调 MCP 调用记录（`state/reports/mcp-calls.jsonl`）、知识卡片（`state/reports/mcp-cards/`）、GB/T 7714 台账（`state/reports/references-ledger.md`）完整闭环；无必调记录 / 无卡片 / 台账不完整 → 评审不通过，返回对应节点补全后再审。
+7. 🔴 **MCP 闭环终检（N8 终审专用）**：终审时按 `mcp/validation-checkpoints.md` 校验六节点必调（含 N6） MCP 调用记录（`state/reports/mcp-calls.jsonl`）、知识卡片（`state/reports/mcp-cards/`）、GB/T 7714 台账（`state/reports/references-ledger.md`）完整闭环；无必调记录 / 无卡片 / 台账不完整 → 评审不通过，返回对应节点补全后再审。
 
 ### 模式专属职责
 
