@@ -18,14 +18,14 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 REPO = Path(__file__).resolve().parents[1]
-CACHE_ROOT = Path.home() / ".zcode" / "cli" / "plugins" / "cache" / "math-modeling"
-PLUGIN_DIR = CACHE_ROOT / "math-modeling-agent-system"
+CACHE_ROOT = Path.home() / ".zcode" / "cli" / "plugins" / "cache" / "academic-orchestrator"
+PLUGIN_DIR = CACHE_ROOT / "academic-orchestrator"
 INSTALLED = CACHE_ROOT / "installed_plugins.json"
 KNOWN_MARKETPLACES = CACHE_ROOT / "known_marketplaces.json"
 
 AGENT_COUNT, SKILL_COUNT, COMMAND_COUNT = 24, 34, 22
 HOSTILE_NAMES = ("math", "modeling", "mm-", "academic-", "humaniz", "latex", "mathematical-")
-PLUGIN_ID = "math-modeling-agent-system@math-modeling"
+PLUGIN_ID = "academic-orchestrator@academic-orchestrator"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 IGNORED_PARTS = {".git", "__pycache__"}
 IGNORED_SUFFIXES = {".pyc"}
@@ -53,7 +53,7 @@ class RegistryPaths:
             registry_root = cache
         else:
             registry_root = cache.parent.parent if cache.parent.name == "cache" else cache.parent
-        return cls(repo, cache, cache / "math-modeling-agent-system",
+        return cls(repo, cache, cache / "academic-orchestrator",
                    registry_root / "installed_plugins.json", registry_root / "known_marketplaces.json")
 
 

@@ -44,7 +44,7 @@ def seed_components(root: Path, *, nested: bool = False) -> None:
 def test_registry_paths_are_derived_from_arguments(tmp_path: Path):
     repo = tmp_path / "repo"
     cache_root = tmp_path / "cache"
-    plugin_dir = cache_root / "math-modeling-agent-system"
+    plugin_dir = cache_root / "academic-orchestrator"
     version_dir = plugin_dir / "1.2.3"
     seed_components(repo)
     seed_components(version_dir)
@@ -60,7 +60,7 @@ def test_registry_paths_are_derived_from_arguments(tmp_path: Path):
 def test_registry_validates_complete_component_trees_and_extras(tmp_path: Path):
     repo = tmp_path / "repo"
     cache_root = tmp_path / "cache"
-    version_dir = cache_root / "math-modeling-agent-system" / "1.2.3"
+    version_dir = cache_root / "academic-orchestrator" / "1.2.3"
     seed_components(repo, nested=True)
     seed_components(version_dir, nested=True)
     write_tree(version_dir, "skills/s/extra.txt", "extra")
@@ -74,12 +74,12 @@ def test_registry_validates_complete_component_trees_and_extras(tmp_path: Path):
 def test_registry_validates_installed_source_install_path_and_cache_manifest(tmp_path: Path):
     repo = tmp_path / "repo"
     cache_root = tmp_path / "cache"
-    version_dir = cache_root / "math-modeling-agent-system" / "1.2.3"
+    version_dir = cache_root / "academic-orchestrator" / "1.2.3"
     seed_components(repo)
     seed_components(version_dir)
     write_json(cache_root / "installed_plugins.json", {
         "plugins": [{
-            "id": "math-modeling-agent-system@math-modeling",
+            "id": "academic-orchestrator@academic-orchestrator",
             "version": "1.2.3",
             "source": {"path": str(tmp_path / "wrong-source")},
             "installPath": str(tmp_path / "wrong-install"),

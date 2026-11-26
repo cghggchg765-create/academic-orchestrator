@@ -81,7 +81,7 @@ def user_sync_status() -> dict:
             if missing:
                 issues.append(f"用户级 {comp}/ 缺 {len(missing)} 项: {missing[:5]}")
     # 插件缓存（版本动态，随仓库版本走）
-    plug = HOME / ".zcode" / "cli" / "plugins" / "cache" / "math-modeling" / "math-modeling-agent-system" / repo_ver
+    plug = HOME / ".zcode" / "cli" / "plugins" / "cache" / "academic-orchestrator" / "academic-orchestrator" / repo_ver
     if not (plug / ".zcode-plugin" / "plugin.json").exists():
         issues.append(f"插件缓存缺失: {plug}")
     return {"repo_version": repo_ver, "issues": issues}

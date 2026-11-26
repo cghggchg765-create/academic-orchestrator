@@ -1,6 +1,6 @@
 {
-  "name": "math-modeling",
-  "description": "数学建模多智能体协同系统插件市场（本地目录：9 阶段建模主线 + ARS 学术研究支撑，35 Skill / 24 Agent / 22 命令，含 MCP 四类声明）",
+  "name": "academic-orchestrator",
+  "description": "学术科研编排核心插件市场（编排骨架 + 建模子轨 + 图表对标 + 运行时热插拔路由）",
   "plugins": [
     {
       "name": "academic-orchestrator",
@@ -8,26 +8,28 @@
         "source": "directory",
         "path": "F:\\deskop\\数学建模skills"
       },
-      "description": "数学建模多智能体协同系统（1.7.0）：9 阶段建模主线 + ARS 学术研究支撑，35 Skill + 24 Agent + 22 命令，MCP 检索卡片体系与 Deep Research 迭代融合",
+      "description": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。23 Skill / 21 Agent / 7 命令。",
       "description_i18n": {
-        "en": "Math modeling multi-agent system (1.7.0): 9-phase pipeline + ARS academic research, 35 skills + 24 agents + 22 commands, MCP retrieval-card system and Deep Research loop fusion",
-        "zh-CN": "数学建模多智能体协同系统（1.7.0）：9 阶段建模主线 + ARS 学术研究支撑，35 个 Skill + 24 个 Agent + 22 个命令，含 MCP 检索卡片体系与 Deep Research 迭代融合。"
+        "en": "Academic orchestration core (2.0.0): 9-stage state machine, gate system, iteration loop, background parallel dispatch, figure/table literature benchmarking. 23 skills / 21 agents / 7 commands.",
+        "zh-CN": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。23 Skill / 21 Agent / 7 命令。"
       },
-      "version": "1.8.0",
+      "version": "2.0.0",
       "author": {
         "name": "academic-orchestrator"
       },
-      "category": "math-modeling",
+      "category": "academic",
       "keywords": [
+        "academic-orchestration",
+        "paper",
+        "peer-review",
+        "figure-benchmark",
+        "gate-system",
         "math-modeling",
-        "CUMCM",
-        "数学建模",
-        "multi-agent",
-        "latex",
-        "iteration-engine",
-        "mcp"
+        "学术编排",
+        "论文",
+        "图表对标"
       ],
-      "icon": "📐"
+      "icon": "🎓"
     }
   ]
 }

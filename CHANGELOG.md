@@ -2,6 +2,57 @@
 
 本仓库遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/) 与 [Conventional Commits](https://www.conventionalcommits.org/)。版本单一来源：`pyproject.toml`。
 
+## [2.0.0] - 2026-11-26
+
+定位变更：**数学建模专用插件 → 学术科研编排核心**（通用学术 + 建模子轨）。学术界主体能力交由 `academic-research-skills`、ARIS、nature-* 家族提供；本插件只保留编排骨架与原生专项。
+
+### Changed（破坏性）
+
+- **插件改名** `math-modeling-agent-system` → `academic-orchestrator`。三份 manifest（`.zcode-plugin/` / `.claude-plugin/` / `.codex-plugin/`）、`marketplace.json`、`pyproject.toml` 同步；命名空间前缀引用（`academic-orchestrator:mm-*`）全量改写。
+- **编排载体迁移**：`agents/orchestrator.md`（子 Agent）→ `skills/academic-orchestration/SKILL.md`（主 Agent 协议）。原因是 ZCode 官方运行时把 `Agent`/`Task` 从子 Agent 工具表中剔除（`subagents:{enabled:false}`），子 Agent **无法**再派子 Agent，原设计在宿主上不可执行。
+- **agent frontmatter 全面合规**：21 个 agent 由非标准键（`mode` / `temperature` / `steps` / `metadata` / `permission`）改为官方 strict schema（`tools` / `disallowedTools` / `model` / `maxTurns`）。原写法不在 schema 内，`task: deny` 等权限约束**从未真正生效**。
+- **N0 executor** `orchestrator` → `main-agent`（项目初始化由主 Agent 完成）。
+
+### Removed（消除重复）
+
+- **10 个第三方复制 skill**：`xlsx`、`frontend-design`、`theme-factory`（源自 anthropics/skills）、`test-driven-development`、`systematic-debugging`、`receiving-code-review`、`subagent-driven-development`（源自 obra/superpowers）、`drawio-skill`（旧版 1.14.0）、`make-pdf`/`investigate`（gstack 依赖已剥离、功能残缺）。能力需求改由 `mm-skill-router` 运行时发现。
+- **3 个 ARS 镜像 agent**：`research_architect_agent` / `synthesis_agent` / `report_compiler_agent`（与 ARS 插件重复，且 name 用下划线与上游连字符不一致）。
+- **ARS 遗产**：`pi/`、`audits/`、`examples/`、`docs/design/`、`docs/migration/`、`prompts/`，以及死脚本 `check_agents_mirror_sync.py`（断言 `agents/` 只能有 3 个 ARS agent，与本插件结构冲突，从未生效）。
+- **`__pycache__` / `*.pyc`**（Python 3.14 编译产物，跨版本死二进制）。
+
+### Added
+
+- **图表/表格文献对标体系**（对应「写论文时查同领域论文实际图表列名与数据项」需求）：
+  - `skills/figure-table-benchmark/SKILL.md`：四步法 + 七维判定口径（列完备 / 统计量 / 单位 / 可比性 / 分组 / 图型 / 学术表达）。
+  - `agents/mm-figure-table-benchmarker.md`：专职审阅 Agent，产出对标矩阵。
+  - **B1 门禁**：N6/N7/N8 阻塞级门禁，要求 ≥3 篇同领域论文、七维逐项有证据、无 `GAP_MAJOR`。
+  - `references/benchmark-matrix.schema.json`：矩阵机器可读结构。
+- **后台并行派发与运行中纠正协议**（`academic-orchestration` 新增章节）：`run_in_background` 非阻塞派发、等待期可并行的准备项清单、`SendMessage` 纠正触发条件与报文格式、`RespondToCoordinator` 回执、纠偏留痕与 N8 终审核对（`CORRECTION_UNACKED`）。
+- **门禁登记单一事实源**：`shared/contracts/gates-registry.json` + schema，lint 校验其与 `state_defs.NODES.gates` 不漂移。
+- **上游更新机制**：`upstream-manifest.json`（9 个上游的 repo / git 源 / 版本 / 更新方式）+ `scripts/check_upstream_updates.py`（只读检查，`--apply` 才 `pull --ff-only`）+ `/academic-update` 命令。
+- **能力词表扩充**：新增 `figure.benchmark`、`table.build` 两项能力（共 21 项）。
+
+### Fixed
+
+- `node-review` 门禁路由：secondary 审阅者的结论原先会写进主门禁（B1 被记成 V1），现按审阅者路由到专属门禁。
+- secondary 审阅者的必读 skill 校验：不再强制声明执行方规范（如 `mm-visualization`），改用其专项清单（`SECONDARY_REVIEWER_SKILLS`）。
+- `state_scaffold` 未透传 `secondary_reviewers` 到项目 registry。
+- 死引用：`build` agent（不存在）→ 并入 `latex_linter`；`ref/math_model/…` 标注为外部参考项目而非本地路径。
+- 换行统一：1714 个文件 CRLF → LF，并加 `.gitattributes`（`* text=auto eol=lf`）防止回归。
+- `plugin_registry_check.py` / `self_check.py` / 相关测试的硬编码插件名同步到新名。
+
+### Verification
+
+- `python scripts/lint_contracts.py` 零报错（含新增的 `check_gates_registry` / `check_benchmark_contract`）。
+- `python -m pytest tests -q`：159 passed / 5 skipped / 0 failed。
+- 空跑：`state_utils.py init` 全量建结构 → N0 由 `main-agent` 完成 → B1 门禁由 `mm-figure-table-benchmarker` 落盘且**不污染 V1**。
+- `/academic-update` 实测：正确识别 9 个上游，网络不可达时如实报 `FETCH_FAILED`。
+
+### Known limitations
+
+- 插件缓存**尚未同步**（用户要求先不安装）：源码为 2.0.0，已安装仍为 1.8.0。`self_check` 会如实报告「插件缓存缺失」，对应测试已改为跳过而非误判通过。
+- `evals/`、`scripts/check_*.py`（108 个）、`tests/` 保留未删：它们是验证基础设施（177 条 CI pytest 清单依赖），不属于 `plugin.json` 的发布面（只发 skills/agents/commands），删除会破坏验收能力。
+
 ## [1.8.0] - 2026-09-05
 
 ### Fixed
