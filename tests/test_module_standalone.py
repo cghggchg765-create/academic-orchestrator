@@ -47,7 +47,7 @@ class RegistryResolvabilityTest(unittest.TestCase):
                 self.assertIn(entry.get("executor"), self.agent_files, f"{node_id} executor")
                 self.assertIn(entry.get("reviewer"), self.agent_files, f"{node_id} reviewer")
                 for skill in entry.get("required_skills", []):
-                    short = skill.split(":", 1)[-1]  # 去掉 math-modeling-agent-system: 前缀
+                    short = skill.split(":", 1)[-1]  # 去掉 academic-orchestrator: 前缀
                     self.assertIn(short, self.skill_dirs, f"{node_id} required_skills 缺 {short}")
                 self.assertTrue(entry.get("gates"), f"{node_id} 门禁为空")
 

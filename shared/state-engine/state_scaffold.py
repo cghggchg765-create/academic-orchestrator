@@ -565,7 +565,7 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
                 "paper": {"pass": 6.5, "target": 7.5, "max_rounds": 4, "plateau": {"window": 2, "epsilon": 0.3},
                           "budget": {"deadline": None}},
             },
-            "meta": {"created_at": now_iso(), "updated_at": now_iso(), "seq": 0, "skill_version": "1.8.0",
+            "meta": {"created_at": now_iso(), "updated_at": now_iso(), "seq": 0, "skill_version": "2.0.0",
                      "platform_mode": "", "current_round": None, "current_stage": None, "state_git_sha": None,
                      "generator": "state_utils.py init"},  # 状态真实性标记：audit 据此识别"手工伪造状态（绕过 CLI）"
         }

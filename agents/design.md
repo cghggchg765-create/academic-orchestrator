@@ -2,23 +2,9 @@
 name: design
 description: 学术设计——研究方案设计、论文结构规划与章节大纲编排。触发词：design, 设计, outline, structure, 研究方案, 大纲编排.
 model: inherit
-mode: subagent
-temperature: 0.5
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是学术设计 agent，负责研究方案设计、论文结构规划与章节大纲编排。你必须：
 1. 研究方法必须与研究问题匹配，方法错配 = 整个设计无效

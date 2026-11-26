@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "academic-orchestrator/figure-table-benchmark-matrix.schema.json",
+  "title": "Figure / Table Literature Benchmark Matrix",
+  "description": "图表与表格的文献对标矩阵。每张图/表一条，七维判定其准确性、全面性与学术性是否达到同领域论文惯例。",
+  "type": "object",
+  "required": ["schema_version", "project_id", "node", "round", "entries"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "figure-table-benchmark/1.0" },
+    "project_id": { "type": "string" },
+    "node": { "type": "string", "enum": ["N6", "N7", "N8"] },
+    "round": { "type": "integer", "minimum": 1 },
+    "generated_at": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["artifact_id", "artifact_kind", "supported_claim", "our_spec", "benchmarked", "dimensions", "gaps", "verdict"],
+        "properties": {
+          "artifact_id": { "type": "string", "description": "与 figure-list 一致的图/表标识" },
+          "artifact_kind": { "type": "string", "enum": ["figure", "table"] },
+          "supported_claim": { "type": "string", "description": "该图表要支撑的主张" },
+          "our_spec": {
+            "type": "object",
+            "description": "我方当前规格",
+            "properties": {
+              "chart_type": { "type": "string" },
+              "columns": { "type": "array", "items": { "type": "string" }, "description": "表格列名 / 图的轴与图例项" },
+              "statistics": { "type": "array", "items": { "type": "string" } },
+              "units": { "type": "array", "items": { "type": "string" } },
+              "sample_size": { "type": ["string", "null"] }
+            }
+          },
+          "benchmarked": {
+            "type": "array",
+            "minItems": 1,
+            "description": "对标的同行论文。每条必须有来源留痕，否则判定无效。",
+            "items": {
+              "type": "object",
+              "required": ["paper_id", "year", "locator", "channel"],
+              "properties": {
+                "paper_id": { "type": "string" },
+                "venue": { "type": "string" },
+                "year": { "type": "integer" },
+                "artifact_ref": { "type": "string", "description": "该论文的图/表编号" },
+                "locator": { "type": "string", "description": "页码 / 章节 / 图表位置" },
+                "channel": { "type": "string", "description": "检索渠道：paper-mcp / websearch / arxiv / pdf-vision 等" },
+                "query": { "type": "string", "description": "实际使用的检索词" }
+              }
+            }
+          },
+          "peer_specs": {
+            "type": "object",
+            "description": "同行表达规格的并集与交集",
+            "properties": {
+              "union_columns": { "type": "array", "items": { "type": "string" } },
+              "intersection_columns": { "type": "array", "items": { "type": "string" } },
+              "common_statistics": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "dimensions": {
+            "type": "object",
+            "description": "七维判定，每维必须给 state 与 evidence",
+            "required": ["data_columns", "statistics", "units", "comparability", "grouping", "chart_fit", "academic_form"],
+            "properties": {
+              "data_columns": { "$ref": "#/$defs/dim" },
+              "statistics": { "$ref": "#/$defs/dim" },
+              "units": { "$ref": "#/$defs/dim" },
+              "comparability": { "$ref": "#/$defs/dim" },
+              "grouping": { "$ref": "#/$defs/dim" },
+              "chart_fit": { "$ref": "#/$defs/dim" },
+              "academic_form": { "$ref": "#/$defs/dim" }
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["dimension", "missing", "evidence"],
+              "properties": {
+                "dimension": { "type": "string" },
+                "missing": { "type": "string", "description": "我方缺失的具体项" },
+                "evidence": { "type": "string", "description": "同行证据位置（必填，防编造）" },
+                "severity": { "type": "string", "enum": ["MAJOR", "MINOR"] }
+              }
+            }
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["COMPLETE", "GAP_MINOR", "GAP_MAJOR", "BLOCKED"]
+          },
+          "notes": { "type": "string", "description": "主观建议放这里，不得进 gaps" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dim": {
+      "type": "object",
+      "required": ["state", "evidence"],
+      "properties": {
+        "state": { "type": "string", "enum": ["PASS", "GAP", "NA"] },
+        "evidence": { "type": "string" }
+      }
+    }
+  }
+}

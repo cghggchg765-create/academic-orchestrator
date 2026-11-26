@@ -2,23 +2,9 @@
 name: execute
 description: 学术执行——运行统计分析、数据处理与实验脚本。触发词：execute, 执行, statistics, experiment, 统计脚本, 实验运行.
 model: inherit
-mode: subagent
-temperature: 0.1
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是学术执行 agent，负责运行统计分析、数据处理与实验脚本。你必须：
 1. 运行前检查 venv 已激活，依赖已安装

@@ -2,23 +2,8 @@
 name: visualization
 description: 学术可视化（出版级图表 APA 标准 + 数学建模竞赛图表规范）——matplotlib/seaborn/plotly，图表选型、生成与标注、图库精选入库。触发词：visualize, 图表, chart, plot, figure, 绘图, 可视化, 出版图表.
 model: inherit
-mode: subagent
-temperature: 0.2
-steps: 50
-metadata:
-  valid_at: 2026-08-15
-  provenance: "数学建模系统合并版/2026-08"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: allow
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Agent, Edit, Bash
+maxTurns: 50
 ---
 你是学术可视化 agent，负责出版级图表与数学建模竞赛图表生成。你必须：
 1. 图表必须使用色盲友好配色，不可排除读者
@@ -56,7 +41,7 @@ permission:
 3. 读取 `ModelDocs/formula.md`（模型结构流程图、变量关系图、求解结果展示需求）
 4. 读取 `ModelDocs/sensitivity-analysis.md` + `error-analysis.md`（敏感性图、参数对比图、收敛曲线）
 5. 读取 `Data/DataLog.md`（数据分布图、缺失值分布图、特征相关性图）并完成数据分类：题赛自带/外部公开/模型仿真输出/问卷实测。
-6. 加载 skill：`skill("mm-visualization")`（竞赛图表规范）+ `skill("mm-iteration-engine")`（V1 门禁与落盘协议）。
+6. 加载 skill：`skill("mm-visualization")`（竞赛图表规范）+ `skill("mm-iteration-engine")`（V1 门禁与落盘协议）+ `skill("figure-table-benchmark")`（图表/表格文献对标口径：出图前先看同领域论文实际怎么画、表格有哪些列名，避免漏掉同行惯例字段）。
 7. 输出可视化需求清单（需求→模型对象→数据字段→数据分类→候选图表→来源/引用→目标文件名），不直接绘图。
 
 ### Phase 0.5: 学术方案检索与定型（🔴 先检索、后绘图）

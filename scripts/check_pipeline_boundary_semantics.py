@@ -84,7 +84,7 @@ PROTO = "academic-pipeline/references/process_summary_protocol.md"
 
 # --- Invariant 1: Methodology Blueprint on all three Stage 1→2 surfaces ---
 INV1_FRAGMENTS = {
-    SKILL: "Stage 1  --> 2: math-modeling-agent-system:deep-research handoff (RQ Brief + Methodology Blueprint + Bibliography + Synthesis)",
+    SKILL: "Stage 1  --> 2: academic-orchestrator:deep-research handoff (RQ Brief + Methodology Blueprint + Bibliography + Synthesis)",
     SM: "| checkpoint | Stage 2 | User confirms | handoff RQ Brief + Methodology Blueprint + Bibliography + Synthesis |",
     ORCH: "| Stage 1 -> 2 | RQ Brief, Methodology Blueprint, Annotated Bibliography, Synthesis Report |",
 }

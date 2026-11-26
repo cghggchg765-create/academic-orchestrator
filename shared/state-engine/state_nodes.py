@@ -128,8 +128,9 @@ def cmd_node_finish(args):
     state = load_state(root)
     node = args.node
     stage = NODES[node]["stage"]
-    # 执行 Agent 校验（防主 agent 内联代做）：非 N0 必须声明执行者且与 registry executor 匹配
-    executor = args.agent or ("orchestrator" if node == "N0" else "")
+    # 执行 Agent 校验（防内联代做）：非 N0 必须声明执行者且与 registry executor 匹配。
+    # N0 为项目初始化，2.0.0 起由主 Agent 完成，executor 记为 NODES 中声明的 main-agent。
+    executor = args.agent or (NODES[node]["executor"] if node == "N0" else "")
     if not executor:
         sys.exit(f"[state_utils] node-finish 必须指定 --agent（执行该节点的 Agent；N0 可省）")
     if executor != NODES[node]["executor"]:

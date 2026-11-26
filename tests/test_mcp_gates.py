@@ -72,14 +72,14 @@ class MCPGatesTest(unittest.TestCase):
 
     def test_n1_node_review_pass_blocks_without_mcp_evidence(self):
         r = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                           "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project), check=False)
+                           "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("禁止纯内生", r.stderr)
 
     def test_n1_node_review_pass_allows_with_mcp_evidence(self):
         self.seed_mcp_calls(self.project, "N1")
         r = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                           "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                           "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                            "--evidence", "ProblemInfo/ProblemNotes.md", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
@@ -87,13 +87,13 @@ class MCPGatesTest(unittest.TestCase):
 
     def test_n1_node_review_pass_allows_explicit_exemption(self):
         r = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                           "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                           "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                            "--allow-missing-mcp", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_n2_node_review_pass_not_gated(self):
         r = self.run_state("node-review", "N2", "--agent", "reviewer", "--result", "PASS",
-                           "--skills", "math-modeling-agent-system:mm-data-preprocessing", "--evidence", "Data/DataLog.md",
+                           "--skills", "academic-orchestrator:mm-data-preprocessing", "--evidence", "Data/DataLog.md",
                            "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 
@@ -105,7 +105,7 @@ class MCPGatesTest(unittest.TestCase):
         r = self.run_state("round-score", "N4", "--round", "1", "--total", "8",
                            "--dims", '{"correctness":8,"efficiency":7,"readability":7,"robustness":8,"innovation":8}',
                            "--judge", "mm-code-reviewer",
-                           "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                           "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                            "--evidence", "Code/output/run.json", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("禁止纯内生", r.stderr)
@@ -117,7 +117,7 @@ class MCPGatesTest(unittest.TestCase):
         r = self.run_state("round-score", "N4", "--round", "1", "--total", "8",
                            "--dims", '{"correctness":8,"efficiency":7,"readability":7,"robustness":8,"innovation":8}',
                            "--judge", "mm-code-reviewer",
-                           "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                           "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                            "--evidence", "Code/output/run.json", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
@@ -131,14 +131,14 @@ class MCPGatesTest(unittest.TestCase):
         self.run_state("round-score", "N4", "--round", "1", "--total", "9",
                        "--dims", '{"correctness":9,"efficiency":8,"readability":8,"robustness":9,"innovation":9}',
                        "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         self.run_state("round-decide", "N4", "--round", "1", "--dir", str(self.project))
         self.run_state("round-start", "N4", "--dir", str(self.project))  # round2
         r = self.run_state("round-score", "N4", "--round", "2", "--total", "9",
                            "--dims", '{"correctness":9,"efficiency":8,"readability":8,"robustness":9,"innovation":9}',
                            "--judge", "mm-code-reviewer",
-                           "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                           "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                            "--evidence", "Code/output/run.json", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("禁止纯内生", r.stderr)
@@ -152,7 +152,7 @@ class MCPGatesTest(unittest.TestCase):
         self.run_state("round-score", "N4", "--round", "1", "--total", "5",
                        "--dims", '{"correctness":5}',
                        "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         r = self.run_state("round-decide", "N4", "--round", "1", "--feedback", "重跑",
                            "--dir", str(self.project), check=False)
@@ -166,7 +166,7 @@ class MCPGatesTest(unittest.TestCase):
         self.run_state("round-score", "N4", "--round", "1", "--total", "5",
                        "--dims", '{"correctness":5}',
                        "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         r = self.run_state("round-decide", "N4", "--round", "1", "--feedback", "重跑",
                            "--reason", "根因=算法边界溢出；差距=正确性5；下轮方案=修正索引并重跑验证",
@@ -182,7 +182,7 @@ class MCPGatesTest(unittest.TestCase):
         self.run_state("round-score", "N4", "--round", "1", "--total", "9",
                        "--dims", '{"correctness":9,"efficiency":8,"readability":8,"robustness":9,"innovation":9}',
                        "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         r = self.run_state("round-decide", "N4", "--round", "1", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -194,7 +194,8 @@ class MCPGatesTest(unittest.TestCase):
         self.run_state("round-start", "N8", "--dir", str(self.project))
         r = self.run_state("round-score", "N8", "--round", "1", "--total", "8",
                            "--dims", '{"假设合理性":8,"建模创造性":8,"结果正确性":8,"表述清晰性":8,"格式规范性":8}',
-                           "--judge", "reviewer", "--skills-read", "math-modeling-agent-system:mm-self-review",
+                           "--judge", "reviewer",
+                           "--skills-read", "academic-orchestrator:mm-self-review,academic-orchestrator:figure-table-benchmark",
                            "--evidence", "ReportPaper/LaTeX/main.tex", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 

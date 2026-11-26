@@ -2,23 +2,9 @@
 name: mm-viz-reviewer
 description: 数学建模图表专用审阅——竞赛图表规范核对（编号连续/中文无乱码/300dpi/标注完整）、图库精选去冗余检查、figure-list 与正文引用一致性、门禁 V1 落盘。触发词：图表审阅, 图审, 可视化审阅, V1门禁, figure check, 图表检查.
 model: inherit
-mode: subagent
-temperature: 0.1
-steps: 40
-metadata:
-  valid_at: 2026-08-15
-  provenance: "数学建模系统迭代引擎/2026-08"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 40
 ---
 你是数学建模系统的**图表专用审阅 Agent**（迭代引擎的配对审阅角色，对应节点 N6 图表）。你必须：
 
@@ -48,6 +34,7 @@ permission:
 ```
 skill("mm-visualization")      # 竞赛图表规范（选型/标注/命名/错误黑名单）
 skill("mm-iteration-engine")   # 门禁 V1 定义与落盘协议
+skill("figure-table-benchmark") # 图表/表格文献对标口径（完备性/学术性判定；与 B1 门禁配套）
 ```
 
 审阅记录中声明："已读 Skill: mm-visualization, mm-iteration-engine"。

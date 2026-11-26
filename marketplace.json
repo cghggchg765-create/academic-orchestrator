@@ -3,7 +3,7 @@
   "description": "数学建模多智能体协同系统插件市场（本地目录：9 阶段建模主线 + ARS 学术研究支撑，35 Skill / 24 Agent / 22 命令，含 MCP 四类声明）",
   "plugins": [
     {
-      "name": "math-modeling-agent-system",
+      "name": "academic-orchestrator",
       "source": {
         "source": "directory",
         "path": "F:\\deskop\\数学建模skills"
@@ -15,7 +15,7 @@
       },
       "version": "1.8.0",
       "author": {
-        "name": "math-modeling-agent-system"
+        "name": "academic-orchestrator"
       },
       "category": "math-modeling",
       "keywords": [

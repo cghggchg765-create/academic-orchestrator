@@ -62,40 +62,45 @@ TODO_FILE = os.path.join(STATE_DIR, "todo.md")
 # ---------------------------------------------------------------- 节点定义（与 registry.json / SKILL §6.1 双份一致）
 
 NODES = {
-    "N0": {"dir": "需求确认", "name": "需求确认", "executor": "orchestrator", "reviewer": None, "skills": [],
+    "N0": {"dir": "需求确认", "name": "需求确认", "executor": "main-agent", "reviewer": None, "skills": [],
            "gates": [], "artifact": "README-项目总说明.md, ProblemInfo/TeamInfo.txt, ProblemInfo/TimePlan.md, state/",
            "stage": "0_init", "review_mode": None, "phrases": []},
     "N1": {"dir": "选题拆解", "name": "选题拆解", "executor": "selector", "reviewer": "reviewer",
-           "skills": ["math-modeling-agent-system:mm-problem-analysis", "math-modeling-agent-system:mm-self-review"],
+           "skills": ["academic-orchestrator:mm-problem-analysis", "academic-orchestrator:mm-self-review"],
            "gates": ["M1", "H1"], "artifact": "ProblemInfo/", "stage": "1_analysis",
            "review_mode": "node-review", "phrases": ["分析这道题", "选哪道", "题目拆解", "审题"]},
     "N2": {"dir": "数据处理", "name": "数据处理", "executor": "dataprep", "reviewer": "reviewer",
-           "skills": ["math-modeling-agent-system:mm-data-preprocessing"],
+           "skills": ["academic-orchestrator:mm-data-preprocessing"],
            "gates": ["D1"], "artifact": "Data/", "stage": "2_data",
            "review_mode": "node-review", "phrases": ["处理数据", "数据清洗", "预处理", "特征工程"]},
     "N3": {"dir": "建模", "name": "建模", "executor": "modeler", "reviewer": "reviewer",
-           "skills": ["math-modeling-agent-system:mm-model-library"],
+           "skills": ["academic-orchestrator:mm-model-library"],
            "gates": ["P1"], "artifact": "ModelDocs/", "stage": "3_modeling",
            "review_mode": "node-review", "phrases": ["选模型", "怎么建模", "建模方案", "公式推导"]},
     "N4": {"dir": "代码", "name": "代码/代码迭代", "executor": "coder", "reviewer": "mm-code-reviewer",
-           "skills": ["math-modeling-agent-system:mm-iteration-engine", "math-modeling-agent-system:mm-algorithm-dev", "math-modeling-agent-system:code-review"],
+           "skills": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-algorithm-dev", "academic-orchestrator:code-review"],
            "gates": ["P2", "A1", "H2"], "artifact": "Code/", "stage": "4_solving",
            "review_mode": "code-score", "phrases": ["写代码", "实现算法", "代码迭代", "修代码", "算法开发"]},
     "N5": {"dir": "调优", "name": "调优", "executor": "tuner", "reviewer": "mm-code-reviewer",
-           "skills": ["math-modeling-agent-system:mm-model-tuning", "math-modeling-agent-system:mm-iteration-engine"],
+           "skills": ["academic-orchestrator:mm-model-tuning", "academic-orchestrator:mm-iteration-engine"],
            "gates": ["T1"], "artifact": "ModelDocs/", "stage": "5_tuning",
            "review_mode": "tune-check", "phrases": ["调参", "调优", "优化模型", "敏感性分析"]},
     "N6": {"dir": "图表", "name": "图表", "executor": "visualization", "reviewer": "mm-viz-reviewer",
-           "skills": ["math-modeling-agent-system:mm-visualization", "math-modeling-agent-system:mm-iteration-engine"],
-           "gates": ["V1"], "artifact": "Code/output/figures, ResultFigures/", "stage": "6_visualization",
-           "review_mode": "viz-check", "phrases": ["画图", "生成图表", "可视化"]},
+           "secondary_reviewers": ["mm-figure-table-benchmarker"],
+           "skills": ["academic-orchestrator:mm-visualization", "academic-orchestrator:mm-iteration-engine",
+                      "academic-orchestrator:figure-table-benchmark"],
+           "gates": ["V1", "B1"], "artifact": "Code/output/figures, ResultFigures/", "stage": "6_visualization",
+           "review_mode": "viz-check", "phrases": ["画图", "生成图表", "可视化", "图表对标"]},
     "N7": {"dir": "论文", "name": "论文/论文修改", "executor": "writing", "reviewer": "reviewer",
-           "skills": ["math-modeling-agent-system:mm-iteration-engine", "math-modeling-agent-system:mm-latex-writing", "math-modeling-agent-system:mm-self-review"],
-           "gates": ["W1", "A2", "W2", "H3"], "artifact": "ReportPaper/", "stage": "7_writing",
+           "secondary_reviewers": ["mm-figure-table-benchmarker"],
+           "skills": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-latex-writing",
+                      "academic-orchestrator:mm-self-review", "academic-orchestrator:figure-table-benchmark"],
+           "gates": ["W1", "A2", "W2", "H3", "B1"], "artifact": "ReportPaper/", "stage": "7_writing",
            "review_mode": "paper-review", "phrases": ["写论文", "论文初稿", "论文修改", "改论文"]},
     "N8": {"dir": "评审", "name": "评审", "executor": "reviewer", "reviewer": "reviewer",
-           "skills": ["math-modeling-agent-system:mm-self-review"],
-           "gates": ["A3"], "artifact": "SubmissionPackage/", "stage": "8_review",
+           "secondary_reviewers": ["mm-figure-table-benchmarker"],
+           "skills": ["academic-orchestrator:mm-self-review", "academic-orchestrator:figure-table-benchmark"],
+           "gates": ["A3", "B1"], "artifact": "SubmissionPackage/", "stage": "8_review",
            "review_mode": "final-review", "phrases": ["检查论文", "评审", "终审", "自检"]},
 }
 
@@ -245,7 +250,7 @@ def require_independent_reviewer(node, agent):
 
 
 def skill_basename(skill):
-    """技能名归一化：去掉插件命名空间前缀（`math-modeling-agent-system:mm-x` → `mm-x`）。
+    """技能名归一化：去掉插件命名空间前缀（`academic-orchestrator:mm-x` → `mm-x`）。
 
     宿主允许两种写法——插件注册名带前缀，流程文档与代理内文按裸名引用——
     两种写法必须视为同一技能，否则 `--skills` 校验会因写法不同而误判缺失。

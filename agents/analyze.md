@@ -2,23 +2,9 @@
 name: analyze
 description: 学术分析——统计分析、误差解释、对照比较与结论边界说明。触发词：analyze, 分析, statistics, interpret, 统计解释, 对照比较.
 model: inherit
-mode: subagent
-temperature: 0.2
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是学术分析 agent，负责统计分析、误差解释、对照比较与结论边界说明。你必须：
 1. 分析前验证数据假设（正态性/方差齐性/样本量），假设不满足时改用非参数方法

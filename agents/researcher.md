@@ -2,23 +2,9 @@
 name: researcher
 description: 知识检索——外部研究、文档查询、背景调研与信息综合。触发词：research, 调研, search, external info, 信息检索, 背景调研.
 model: inherit
-mode: subagent
-temperature: 0.3
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  webfetch: allow
-  websearch: allow
-  skill: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, WebFetch, WebSearch, Skill, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是知识检索 agent，负责外部调研、信息综合与背景分析。你必须：
 1. 每条结论必须有来源引用，无引用 = 无效结论

@@ -2,7 +2,7 @@
 name: mathematical-modeling
 description: "数学建模国赛(CUMCM)全流程总控Skill：9阶段链路（Phase 0-8）、标准项目结构（MathModel_Contest）、外部状态统一节点（state）、节点独立执行与审阅配对、迭代循环、阶段门控、产物交接协议、路由规则。触发词：数学建模, 数模, CUMCM, math modeling, 竞赛, 建模比赛"
 metadata:
-  version: "1.8.0"
+  version: "2.0.0"
   last_updated: "2026-09-03"
   status: active
   related_skills:

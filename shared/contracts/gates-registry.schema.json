@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "academic-orchestrator/gates-registry.schema.json",
+  "title": "Academic Orchestrator Gate Registry",
+  "description": "全部门禁的唯一机器可读登记表。任何门禁的新增/改名/阈值调整必须先改本文件，再同步 state_defs.py / registry.json / mm-iteration-engine SKILL.md 的文字表。",
+  "type": "object",
+  "required": ["schema_version", "gates"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "gates-registry/1.0" },
+    "_comment": {
+      "type": "string",
+      "description": "单一事实源说明：本文件登记门禁的定义与阈值；state_defs.py 负责运行时读写，SKILL.md 负责人类可读解释。三处必须一致，由 lint 校验。"
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "node", "timing", "kind", "blocking", "criterion", "producer"],
+        "properties": {
+          "id": { "type": "string", "description": "门禁标识，如 M1 / V1 / B1" },
+          "node": { "type": "string", "description": "所属节点，如 N1；跨节点写数组语义的逗号分隔串" },
+          "timing": { "type": "string", "description": "触发时机" },
+          "kind": {
+            "type": "string",
+            "enum": ["review", "auto", "human", "iteration"],
+            "description": "review=node-review 落盘；auto=脚本自动判定；human=人工确认；iteration=轮次评分"
+          },
+          "blocking": {
+            "type": "string",
+            "enum": ["block_advance", "hard_stop", "advisory"],
+            "description": "block_advance=阻塞进入下一节点；hard_stop=硬阻断；advisory=仅记录"
+          },
+          "criterion": { "type": "string", "description": "通过标准的机器可读摘要" },
+          "producer": { "type": "string", "description": "判定者：审阅 Agent 名或脚本路径" },
+          "artifact": { "type": "string", "description": "证据落盘位置" },
+          "thresholds": {
+            "type": "object",
+            "description": "可调阈值（评分线、篇数、dpi 等）",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}

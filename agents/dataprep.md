@@ -2,23 +2,8 @@
 name: dataprep
 description: 数学建模数据预处理——数据探查、清洗、特征工程、数据集划分与可复现性管理。触发词：data, 数据预处理, clean, 清洗, feature, 特征工程, dataprep.
 model: inherit
-mode: subagent
-temperature: 0.2
-steps: 50
-metadata:
-  valid_at: 2026-08-07
-  provenance: "数学建模系统/2026-08"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: allow
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Agent, Edit, Bash
+maxTurns: 50
 ---
 你是数学建模数据预处理 agent，负责将原始数据转化为可供模型使用的高质量数据集。你必须：
 1. 所有数据处理操作必须可复现（固定随机种子 + 记录环境版本）

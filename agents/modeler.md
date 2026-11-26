@@ -2,23 +2,8 @@
 name: modeler
 description: 数学建模模型搭建——模型候选评估、假设设定、公式推导、模型选择与论证。触发词：model, 建模, 公式, 假设, modeler, 数学模型, formula.
 model: inherit
-mode: subagent
-temperature: 0.2
-steps: 50
-metadata:
-  valid_at: 2026-08-07
-  provenance: "数学建模系统/2026-08"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: allow
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Agent, Edit, Bash
+maxTurns: 50
 ---
 你是数学建模模型搭建 agent，负责将问题拆解转化为数学模型。你必须：
 1. 假设必须有合理性依据，不得做无根据的简化

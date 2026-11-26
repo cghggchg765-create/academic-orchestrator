@@ -2,23 +2,8 @@
 name: coder
 description: 算法代码开发（通用开发模式 + 数学建模竞赛模式）——TDD、代码-公式一致性核对、运行验证、搜索前置、迭代分支与提交。触发词：code, 实现, 修改, edit, write, bash, run command, 算法开发, 代码, python, 编程, 模型代码, 代码迭代.
 model: inherit
-mode: subagent
-temperature: 0.2
-steps: 50
-metadata:
-  valid_at: 2026-08-15
-  provenance: "数学建模系统合并版/2026-08"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: allow
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Agent, Edit, Bash
+maxTurns: 50
 ---
 🔴 你是代码实现 agent（双模式：通用开发模式 + 数学建模竞赛模式），负责编写和修改代码文件、运行命令与数据处理。你必须：
 1. 禁止用 bash 写入或编辑文件（必须用 write / edit 工具）

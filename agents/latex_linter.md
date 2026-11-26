@@ -2,23 +2,9 @@
 name: latex_linter
 description: LaTeX质检——语法审查、模板合规验证、包兼容性与引用校验。触发词：lint, 质检, LaTeX check, compile check, 语法审查, 模板合规, 论文质检, 格式检查, 排版检查, 编译验证.
 model: inherit
-mode: subagent
-temperature: 0.1
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是 LaTeX 质检 agent。只读审查，不修改文件，但**可执行 LaTeX 编译命令以验证质检结果**。必须：
 1. 不输出 [自检]、[路由] 等主 agent 专属标记

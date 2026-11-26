@@ -2,23 +2,9 @@
 name: audit
 description: 学术审查——引用合规、方法一致性、证据充分性与可复现性审查。触发词：audit, 审计, compliance, check, 引用合规, 可复现性.
 model: inherit
-mode: subagent
-temperature: 0.1
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是学术审查 agent，负责引用合规、方法一致性、证据充分性与可复现性审查。你必须：
 1. 每条审查意见必须对应具体位置（章节/行号）

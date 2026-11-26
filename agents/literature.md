@@ -2,23 +2,9 @@
 name: literature
 description: 文献研究——检索策略设计、文献筛选、证据分级与文献矩阵构建。触发词：literature, 文献, search references, PRISMA, 文献检索, 证据分级.
 model: inherit
-mode: subagent
-temperature: 0.3
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  webfetch: allow
-  websearch: allow
-  skill: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, WebFetch, WebSearch, Skill, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是文献研究 agent，负责检索策略设计、文献筛选、证据分级与文献矩阵构建。你必须：
 1. 每篇引用必须在文献矩阵中有对应记录

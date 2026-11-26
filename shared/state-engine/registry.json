@@ -144,16 +144,21 @@
       "review_mode": "viz-check",
       "required_skills": [
         "mm-visualization",
-        "mm-iteration-engine"
+        "mm-iteration-engine",
+        "figure-table-benchmark"
       ],
       "gates": [
-        "V1"
+        "V1",
+        "B1"
       ],
       "artifact_dir": "Code/output/figures, ResultFigures/",
       "homepage": "state/nodes/图表/dashboard.md",
       "upstream": [
         "N4",
         "N5"
+      ],
+      "secondary_reviewers": [
+        "mm-figure-table-benchmarker"
       ]
     },
     {
@@ -171,18 +176,23 @@
       "required_skills": [
         "mm-iteration-engine",
         "mm-latex-writing",
-        "mm-self-review"
+        "mm-self-review",
+        "figure-table-benchmark"
       ],
       "gates": [
         "W1",
         "A2",
         "W2",
-        "H3"
+        "H3",
+        "B1"
       ],
       "artifact_dir": "ReportPaper/",
       "homepage": "state/nodes/论文/dashboard.md",
       "upstream": [
         "N6"
+      ],
+      "secondary_reviewers": [
+        "mm-figure-table-benchmarker"
       ]
     },
     {
@@ -198,15 +208,20 @@
       "reviewer": "reviewer",
       "review_mode": "final-review",
       "required_skills": [
-        "mm-self-review"
+        "mm-self-review",
+        "figure-table-benchmark"
       ],
       "gates": [
-        "A3"
+        "A3",
+        "B1"
       ],
       "artifact_dir": "SubmissionPackage/",
       "homepage": "state/nodes/评审/dashboard.md",
       "upstream": [
         "N7"
+      ],
+      "secondary_reviewers": [
+        "mm-figure-table-benchmarker"
       ]
     }
   ]

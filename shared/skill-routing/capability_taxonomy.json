@@ -76,6 +76,18 @@
       "output_kinds": ["audit_report", "figure"]
     },
     {
+      "id": "figure.benchmark",
+      "label": "图表/表格的文献对标与完备性核查",
+      "keywords": ["图表对标", "表格设计", "列名设计", "图表完备", "表格字段", "对比文献图表", "同行图表", "table design", "column schema", "figure benchmark", "table completeness", "chart comparison", "what figures do papers use", "表头设计"],
+      "output_kinds": ["benchmark_matrix", "audit_report"]
+    },
+    {
+      "id": "table.build",
+      "label": "学术表格构建与规范化",
+      "keywords": ["三线表", "表格制作", "表注", "表格模板", "booktabs", "tabular", "table formatting", "table caption", "数据表"],
+      "output_kinds": ["table"]
+    },
+    {
       "id": "latex.build",
       "label": "LaTeX 质检与编译产出",
       "keywords": ["latex", "tex", "编译", "排版", "pdf 产出", "ctex", "typeset", "compile", "xelatex"],
@@ -125,10 +137,10 @@
     "N3": ["research.design", "stats.analysis"],
     "N4": [],
     "N5": ["stats.analysis"],
-    "N6": ["figure.data", "figure.diagram", "figure.audit"],
-    "N7": ["paper.writing", "paper.style", "latex.build", "citation.audit"],
-    "N8": ["paper.review", "integrity.audit", "deai", "citation.audit"],
-    "GENERAL": ["paper.writing", "paper.review", "literature.search", "figure.data", "figure.diagram", "latex.build", "deai", "stats.analysis"]
+    "N6": ["figure.data", "figure.diagram", "figure.audit", "figure.benchmark", "table.build"],
+    "N7": ["paper.writing", "paper.style", "latex.build", "citation.audit", "figure.benchmark", "table.build"],
+    "N8": ["paper.review", "integrity.audit", "deai", "citation.audit", "figure.benchmark"],
+    "GENERAL": ["paper.writing", "paper.review", "literature.search", "figure.data", "figure.diagram", "latex.build", "deai", "stats.analysis", "figure.benchmark"]
   },
   "selection_policy": {
     "_comment": "匹配与排序策略（可调，属于协调层）。primary 会被硬门禁强制加载；supporting 仅作建议。routing_skills 是纯编排入口（加载后自身即为流程），不作为专业执行者被选中。一个能力只取最强的一个 primary（per_capability_primary），避免同质技能并列；阶段总量再受 max_stage_primary 约束。",

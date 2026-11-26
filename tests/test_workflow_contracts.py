@@ -182,7 +182,7 @@ class WorkflowContractsTest(unittest.TestCase):
         self.lock_problem()
         self.run_state("round-start", "N4", "--dir", str(self.project))
         self.run_state("round-score", "N4", "--round", "1", "--total", "6", "--dims", '{"correctness":6}',
-                       "--judge", "mm-code-reviewer", "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--judge", "mm-code-reviewer", "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         self.run_state("round-decide", "N4", "--round", "1", "--feedback", "修复后重跑",
                        "--reason", "正确性低于 pass：核心公式实现有误，根因=边界条件处理缺失，下轮在 SEARCH 后重写求解核心",
@@ -210,7 +210,7 @@ class WorkflowContractsTest(unittest.TestCase):
         """node-review 传入 BLOCKED 时，门禁状态为 BLOCKED，result 含 BLOCKED 前缀。"""
         self.lock_problem()
         result = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "BLOCKED",
-                                "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                                "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                                 "--evidence", "ProblemInfo/ProblemNotes.md",
                                 "--summary", "缺少关键假设说明", "--dir", str(self.project))
         self.assertEqual(result.returncode, 0)
@@ -238,7 +238,7 @@ class WorkflowContractsTest(unittest.TestCase):
         # 先完成 N0, N1, N2, N3 使 N4 前置满足
         self.complete_n0()
         executors = {"N1": "selector", "N2": "dataprep", "N3": "modeler"}
-        skills = {"N1": "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "N2": "math-modeling-agent-system:mm-data-preprocessing", "N3": "math-modeling-agent-system:mm-model-library"}
+        skills = {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}
         for n in ("N1", "N2", "N3"):
             self.run_state("node-start", n, "--dir", str(self.project))
             self.run_state("node-finish", n, "--agent", executors[n], "--skills", skills[n], "--dir", str(self.project))
@@ -371,7 +371,7 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertEqual(plan["status"], "blocked")
         self.complete_n0()
         executors = {"N1": "selector", "N2": "dataprep", "N3": "modeler"}
-        skills = {"N1": "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "N2": "math-modeling-agent-system:mm-data-preprocessing", "N3": "math-modeling-agent-system:mm-model-library"}
+        skills = {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}
         for n in ("N1", "N2", "N3"):
             self.run_state("node-start", n, "--dir", str(self.project))
             self.run_state("node-finish", n, "--agent", executors[n], "--skills", skills[n], "--dir", str(self.project))
@@ -392,7 +392,7 @@ class WorkflowContractsTest(unittest.TestCase):
         self.lock_problem()
         self.run_state("round-start", "N4", "--dir", str(self.project))
         self.run_state("round-score", "N4", "--round", "1", "--total", "7.5", "--dims", '{"correctness":8,"efficiency":7}',
-                       "--judge", "mm-code-reviewer", "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--judge", "mm-code-reviewer", "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         self.run_state("round-decide", "N4", "--round", "1", "--feedback", "可继续优化", "--dir", str(self.project))
         reports = self.project / "state" / "reports"
@@ -456,7 +456,7 @@ class WorkflowContractsTest(unittest.TestCase):
         self.lock_problem()
         # 模拟 N4 已执行，H2 待处理
         self.run_state("auto-check", "N4", "--gate", "H2", "--agent", "mm-code-reviewer",
-                       "--skills", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--summary", "数值量级与代码输出一致", "--round", "1", "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
         self.assertEqual(state["gates"]["H2"]["status"], "auto_passed")
@@ -476,7 +476,7 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertTrue(state["gates"]["H2"]["confirmed"])
         # 核查 Agent 必须独立（执行 Agent 自核被拒）
         r = self.run_state("auto-check", "N4", "--gate", "H2", "--agent", "coder",
-                           "--skills", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                           "--skills", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                            "--summary", "x", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
 
@@ -496,16 +496,16 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("escalate", kinds)  # 防死循环出口
         modify_step = next(s for s in loop["steps"] if s["kind"] == "modify")
         self.assertEqual(modify_step["modify_agent"], "selector")
-        self.assertIn("math-modeling-agent-system:mm-problem-analysis", modify_step["modify_skills"])  # 修改时必须加载 skill
+        self.assertIn("academic-orchestrator:mm-problem-analysis", modify_step["modify_skills"])  # 修改时必须加载 skill
         # 审阅偷懒拦截：FAIL 无 evidence 被拒
         result = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "FAIL",
-                                "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                                "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                                 "--summary", "缺依据", "--dir", str(self.project), check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("evidence", result.stderr + result.stdout)
         # 带证据的 FAIL 可落盘
         result = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "FAIL",
-                                "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                                "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                                 "--evidence", "ProblemInfo/ProblemNotes.md",
                                 "--summary", "缺隐性约束", "--dir", str(self.project))
         self.assertEqual(result.returncode, 0)
@@ -600,22 +600,22 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("selector", r.stderr + r.stdout)
         # 迭代节点 N4 无 round 直接 finish 被拒（技能声明正确，触发迭代强制）
         r = self.run_state("node-finish", "N4", "--agent", "coder",
-                           "--skills", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                           "--skills", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                            "--artifact", "Code/main.py", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("round-start", r.stderr + r.stdout)
         # 正确 Agent + 技能 + 非迭代节点可完成
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                        "--artifact", "ProblemInfo/ProblemNotes.md", "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
         self.assertEqual(state["nodes"]["N1"]["status"], "completed")
         self.assertEqual(state["nodes"]["N1"]["executed_by"], "selector")
         # 技能缺失被拒（强制子 Agent 先加载 required_skills）
         r = self.run_state("node-finish", "N2", "--agent", "dataprep",
-                           "--skills", "math-modeling-agent-system:mm-model-library", "--dir", str(self.project), check=False)
+                           "--skills", "academic-orchestrator:mm-model-library", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
-        self.assertIn("math-modeling-agent-system:mm-data-preprocessing", r.stderr + r.stdout)
+        self.assertIn("academic-orchestrator:mm-data-preprocessing", r.stderr + r.stdout)
 
     def test_audit_detects_fake_state(self):
         """状态真实性：手工伪造的 decision_log（无 generator 标记）会被 audit 识别为绕过 CLI。"""
@@ -664,7 +664,7 @@ class WorkflowContractsTest(unittest.TestCase):
         """执行者证据：节点推进但执行 Agent 无 result.json → audit 报告疑似内联代做。"""
         self.lock_problem()
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                        "--dir", str(self.project))
         r = self.run_state("project-audit", "--dir", str(self.project))
         audit = json.loads(r.stdout)
@@ -686,9 +686,9 @@ class WorkflowContractsTest(unittest.TestCase):
         """级联失效：上游产物变更 → 下游 completed 节点与门禁重置 pending（联动同步）。"""
         self.lock_problem()
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project))
         self.run_state("node-finish", "N2", "--agent", "dataprep",
-                       "--skills", "math-modeling-agent-system:mm-data-preprocessing", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-data-preprocessing", "--dir", str(self.project))
         # 预览模式不修改
         (self.project / "ProblemInfo" / "ProblemNotes.md").write_text("追加内容\n", encoding="utf-8")
         r = self.run_state("cascade-invalidate", "--dir", str(self.project))
@@ -711,9 +711,9 @@ class WorkflowContractsTest(unittest.TestCase):
         r = self.run_state("todo", "plan", "--dir", str(self.project))
         self.assertIn("新增 16 条", r.stdout)
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project))
         self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--summary", "ok",
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--summary", "ok",
                        "--dir", str(self.project))
         r = self.run_state("todo", "plan", "--dir", str(self.project))
         self.assertIn("标记完成 2 条", r.stdout)
@@ -726,9 +726,9 @@ class WorkflowContractsTest(unittest.TestCase):
         """flow-coverage：按状态实际记录对照预期调用集，报告未调用 Agent/Skill。"""
         self.lock_problem()
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project))
         self.run_state("node-finish", "N2", "--agent", "dataprep",
-                       "--skills", "math-modeling-agent-system:mm-data-preprocessing", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-data-preprocessing", "--dir", str(self.project))
         r = self.run_state("flow-coverage", "--dir", str(self.project))
         coverage = json.loads(r.stdout)
         self.assertIn("selector", coverage["used_agents"])
@@ -742,14 +742,14 @@ class WorkflowContractsTest(unittest.TestCase):
         self.lock_problem()
         # 直接标完成、不审阅（门禁 M1 保持 pending）
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project))
         r = self.run_state("project-audit", "--dir", str(self.project))
         audit = json.loads(r.stdout)
         self.assertTrue(any(m["node"] == "N1" for m in audit["unreviewed_completion"]))
         self.assertTrue(any("未审阅即完成" in i for i in audit["summary"]["issues"]))
         # 补上独立审阅 PASS 后不再标记
         self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--summary", "ok",
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--summary", "ok",
                        "--evidence", "ProblemInfo/ProblemNotes.md", "--dir", str(self.project))
         r = self.run_state("project-audit", "--dir", str(self.project))
         audit = json.loads(r.stdout)
@@ -759,14 +759,14 @@ class WorkflowContractsTest(unittest.TestCase):
         """阶段联动：上游 completed 但审阅门禁未过 → 下游 node-start 拦截；审阅 PASS 后开工并刷新 handoff。"""
         self.lock_problem()
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project))
         # 上游未审阅（M1 pending）→ N2 不可开工
         r = self.run_state("node-start", "N2", "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("审阅门禁", r.stderr + r.stdout)
         # 审阅 PASS 后可开工，且 handoff 交接文件自动生成
         self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--summary", "ok",
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--summary", "ok",
                        "--evidence", "ProblemInfo/ProblemNotes.md", "--dir", str(self.project))
         self.run_state("node-start", "N2", "--goal", "清洗数据", "--dir", str(self.project))
         handoff = self.project / "state" / "nodes" / "数据处理" / "handoff.md"
@@ -794,7 +794,7 @@ class WorkflowContractsTest(unittest.TestCase):
         """接手复核：completed 但门禁未过 → 强制复核；审阅 PASS 后 → 复核确认；产物漂移 → 强制复核。"""
         self.lock_problem()
         self.run_state("node-finish", "N1", "--agent", "selector",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--dir", str(self.project))
         r = self.run_state("handover-review", "--dir", str(self.project))
         plan = json.loads(r.stdout)
         self.assertIn("强制复核", plan["nodes"]["N1"]["action"])
@@ -802,7 +802,7 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertIn("待执行", plan["nodes"]["N2"]["action"])
         # 审阅 PASS 后为复核确认
         self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review", "--summary", "ok",
+                       "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review", "--summary", "ok",
                        "--evidence", "ProblemInfo/ProblemNotes.md", "--dir", str(self.project))
         r = self.run_state("handover-review", "--dir", str(self.project))
         plan = json.loads(r.stdout)
@@ -823,23 +823,23 @@ class WorkflowContractsTest(unittest.TestCase):
         for n in ("N1", "N2", "N3"):
             self.run_state("node-start", n, "--dir", str(self.project))
             self.run_state("node-finish", n, "--agent", {"N1": "selector", "N2": "dataprep", "N3": "modeler"}[n],
-                           "--skills", {"N1": "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
-                                        "N2": "math-modeling-agent-system:mm-data-preprocessing", "N3": "math-modeling-agent-system:mm-model-library"}[n],
+                           "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
+                                        "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
                            "--dir", str(self.project))
             self.run_state("node-review", n, "--agent", "reviewer", "--result", "PASS",
-                           "--skills", {"N1": "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
-                                        "N2": "math-modeling-agent-system:mm-data-preprocessing", "N3": "math-modeling-agent-system:mm-model-library"}[n],
+                           "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
+                                        "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
                            "--summary", "ok", "--dir", str(self.project))
         self.run_state("round-start", "N4", "--dir", str(self.project))
         r = self.run_state("round-score", "N4", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
-                           "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                           "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                            "--evidence", "Code/output/run.json",
                            "--dims", '{"correctness":8,"wrong_dim":7}', "--dir", str(self.project), check=False)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("维度键名非法", r.stderr + r.stdout)
         # 合法键名通过
         self.run_state("round-score", "N4", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json",
                        "--dims", '{"correctness":8,"efficiency":8,"readability":8,"robustness":8,"innovation":8}',
                        "--dir", str(self.project))
@@ -851,17 +851,17 @@ class WorkflowContractsTest(unittest.TestCase):
         for n in ("N1", "N2", "N3"):
             self.run_state("node-start", n, "--dir", str(self.project))
             self.run_state("node-finish", n, "--agent", {"N1": "selector", "N2": "dataprep", "N3": "modeler"}[n],
-                           "--skills", {"N1": "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
-                                        "N2": "math-modeling-agent-system:mm-data-preprocessing", "N3": "math-modeling-agent-system:mm-model-library"}[n],
+                           "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
+                                        "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
                            "--dir", str(self.project))
             self.run_state("node-review", n, "--agent", "reviewer", "--result", "PASS",
-                           "--skills", {"N1": "math-modeling-agent-system:mm-problem-analysis,math-modeling-agent-system:mm-self-review",
-                                        "N2": "math-modeling-agent-system:mm-data-preprocessing", "N3": "math-modeling-agent-system:mm-model-library"}[n],
+                           "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
+                                        "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
                            "--summary", "ok", "--dir", str(self.project))
         # N4 round-score 达标 → A1 自动 PASS
         self.run_state("round-start", "N4", "--dir", str(self.project))
         self.run_state("round-score", "N4", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json",
                        "--dims", '{"correctness":8,"efficiency":8,"readability":8,"robustness":8,"innovation":8}',
                        "--dir", str(self.project))
@@ -871,26 +871,26 @@ class WorkflowContractsTest(unittest.TestCase):
         self.run_state("round-decide", "N4", "--round", "1", "--dir", str(self.project))
         # 迭代节点 completed 后需 node-review 落 P2 门禁（下游 N5 开工校验上游门禁）
         self.run_state("node-review", "N4", "--agent", "mm-code-reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--summary", "ok", "--evidence", "Code/output/run.json", "--dir", str(self.project))
         # N5 迭代节点：round-start → score → decide → node-review（T1）
         self.run_state("node-start", "N5", "--dir", str(self.project))
         self.run_state("round-start", "N5", "--dir", str(self.project))
         self.run_state("round-score", "N5", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-model-tuning,math-modeling-agent-system:mm-iteration-engine",
+                       "--skills-read", "academic-orchestrator:mm-model-tuning,academic-orchestrator:mm-iteration-engine",
                        "--evidence", "ModelDocs/sensitivity-analysis.md",
                        "--dims", '{"correctness":8,"efficiency":8,"readability":8,"robustness":8,"innovation":8}',
                        "--dir", str(self.project))
         self.run_state("round-decide", "N5", "--round", "1", "--dir", str(self.project))
         self.run_state("node-review", "N5", "--agent", "mm-code-reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-model-tuning,math-modeling-agent-system:mm-iteration-engine",
+                       "--skills", "academic-orchestrator:mm-model-tuning,academic-orchestrator:mm-iteration-engine",
                        "--summary", "ok", "--evidence", "ModelDocs/sensitivity-analysis.md", "--dir", str(self.project))
         # N6 非迭代节点：node-finish + node-review（V1）
         self.run_state("node-start", "N6", "--dir", str(self.project))
         self.run_state("node-finish", "N6", "--agent", "visualization",
-                       "--skills", "math-modeling-agent-system:mm-visualization,math-modeling-agent-system:mm-iteration-engine", "--dir", str(self.project))
+                       "--skills", "academic-orchestrator:mm-visualization,academic-orchestrator:mm-iteration-engine,academic-orchestrator:figure-table-benchmark", "--dir", str(self.project))
         self.run_state("node-review", "N6", "--agent", "mm-viz-reviewer", "--result", "PASS",
-                       "--skills", "math-modeling-agent-system:mm-visualization,math-modeling-agent-system:mm-iteration-engine",
+                       "--skills", "academic-orchestrator:mm-visualization,academic-orchestrator:mm-iteration-engine,academic-orchestrator:figure-table-benchmark",
                        "--summary", "ok", "--evidence", "ResultFigures/figure-list.md", "--dir", str(self.project))
         self.run_state("node-start", "N7", "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))

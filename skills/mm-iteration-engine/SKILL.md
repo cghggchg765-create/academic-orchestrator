@@ -2,7 +2,7 @@
 name: mm-iteration-engine
 description: "数学建模迭代引擎与外部状态统一节点：state 状态工作栏、节点独立执行与自治联动、专用审阅 Agent 配对、SEARCH（检索地址注册表）→IMPLEMENT→RUN→COMMIT→SCORE→DECIDE 迭代循环、Git 分支/提交规范、代码与论文双评分体系、ZCode/Codex goal/loop 插件适配。触发词：迭代, iteration, 评分, score, 分支, branch, round, 状态节点, state, 案例搜索, 检索地址, 代码迭代, 论文修改"
 metadata:
-  version: "1.8.0"
+  version: "2.0.0"
   last_updated: "2026-08-19"
   status: active
   related_skills:
@@ -351,6 +351,7 @@ python state/state_utils.py review-loop <Nx> --dir .
 | A1 | N4 后 | 代码反模式扫描 0 个 High 命中 | **round-score N4 达标（total≥pass）自动 PASS** | ⛔ 硬阻断 |
 | T1 | N5 后 | 基线已跑/超参对比≥3 组/敏感性覆盖关键参数/鲁棒性≥2 方法 | node-review N5 PASS | 阻塞进 N6 |
 | V1 | N6 后 | 图号连续/中文无乱码/≥300dpi/每图有标注 | node-review N6 PASS | 阻塞进 N7 |
+| **B1** | **N6/N7/N8** | **图表/表格文献对标：七维（列完备/统计量/单位/可比性/分组/图型/学术表达）逐维有证据，对标 ≥3 篇同领域论文，无 `GAP_MAJOR`；矩阵落 `state/reports/figure-table-benchmark/`** | **node-review B1 PASS（审阅者 = mm-figure-table-benchmarker）** | **阻塞图表定稿与论文提交** |
 | W1 | N7 写作前 | 每个主张有代码输出/图表支撑 | **node-start N7 时 V1 已过自动 PASS** | 阻塞正文写作 |
 | A2 | N7 后 | 写作反模式扫描 + 摘要 ≥4 数字 + 无套话黑名单 | **round-score N7 达标（total≥pass）自动 PASS** | ⛔ 硬阻断 |
 | W2 | N7 后 | 论文五维评分 ≥ 6.0（入门门禁；迭代达标线为 termination.paper 的 pass 6.5 / target 7.5） | node-review N7 PASS | 阻塞进 N8 |
@@ -358,7 +359,11 @@ python state/state_utils.py review-loop <Nx> --dir .
 | H1/H2/H3 | N1/N4/N7 后 | 人工确认（题型判定/数值量级/论文整体），用户不在时写 `human_checkpoint.md` 挂起 | auto-check（自动核查）+ h-confirm（人工追认） | 人工在环 |
 | S\<n\>-Nx | N4/N5/N7/N8 每轮 | 迭代轮次评分 ≥ pass（termination 配置） | round-score 自动创建 | 轮次内 |
 
-> 说明：M1/D1/P1/P2/A1/A2/A3 与参考项目同类门禁对齐；T1/V1/W1/W2/H1-H3 为系统扩展（ref 无对应定义）——"对齐参考项目"为**部分对齐**。
+> 说明：M1/D1/P1/P2/A1/A2/A3 与参考项目同类门禁对齐；T1/V1/W1/W2/B1/H1-H3 为系统扩展（ref 无对应定义）——"对齐参考项目"为**部分对齐**。
+>
+> **B1 判定口径**：`COMPLETE`（七维全 PASS 且 ≥3 篇对标）/ `GAP_MINOR`（仅单位/图型/学术表达问题）/ `GAP_MAJOR`（列完备/统计量/可比性/分组任一缺失，或对标不足 3 篇）/ `BLOCKED`（检索不可用）。
+> 只有 `COMPLETE` 与 `GAP_MINOR` 可放行；`GAP_MAJOR` 必须回传 visualization（图）或 writing（表）补齐后复检；`BLOCKED` 由编排方决定降级并留痕。
+> 判据来源：`skills/figure-table-benchmark/SKILL.md` 七维口径 + `references/benchmark-matrix.schema.json` 矩阵结构。
 
 ## 7. 迭代循环状态机（作用于 N4/N5 代码环、N7/N8 论文环）
 
@@ -610,11 +615,13 @@ python state/state_utils.py sync-plan [--dir .]                                 
 
 | 资源 | 说明 |
 |---|---|
+| `ref/math_model/…`（**外部参考项目，不随本插件分发**） | 下列 4 条为该参考项目的路径，仅作设计来源标注。本机若未放置该参考仓库（`.gitignore` 已忽略 `ref/`），这些路径不可读，属正常情况，**不得当作本地文件引用**。 |
 | `ref/math_model/state/decision_log.json` | 状态 schema 1.0 蓝本（本 schema 2.0 为其严格超集） |
-| `ref/math_model/references/08-stage-verification.md` | 门禁思想来源（M1/D1/P1/P2/A1/A2/A3 同类对齐；T1/V1/W1/W2/H1-H3 为系统扩展） |
+| `ref/math_model/references/08-stage-verification.md` | 门禁思想来源（M1/D1/P1/P2/A1/A2/A3 同类对齐；T1/V1/W1/W2/B1/H1-H3 为系统扩展） |
 | `ref/math_model/references/15-scoring-rubric.md` | 五维评分锚点、硬上限、仲裁规则借鉴来源（部分对齐） |
 | `ref/math_model/workflows/adversarial-review.js` | 对抗审稿聚合实现参考（≤4 轮、目标 7.5） |
 | `shared/state-engine/state_utils.py` | 状态节点 CLI 入口（薄分发层；init 时连同 `state_defs/state_scaffold/state_nodes/state_review/state_audit/state_rounds/state_search` 兄弟模块一并复制进项目 state/） |
+| `shared/contracts/gates-registry.json` | **门禁登记单一事实源**（2.0.0 新增）：全部门禁的 id/节点/时机/类型/阻断级别/判据/产出者/阈值。改门禁先改此处。 |
 | `mcp/call-hierarchy.md` | 核心节点 MCP 必调五节点表（N1/N3/N4/N5/N7，禁止纯内生） |
 | `mcp/knowledge-card.template.md` / `mcp/reference-ledger.template.md` | 检索知识卡片与 GB/T 7714 台账模板（search-evidence 派发载体） |
 | `deep-research` Skill | 迭代不达标时的自动迭代审阅与根因深度调研（按需唤起，回填下一轮 SEARCH） |

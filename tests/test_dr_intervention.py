@@ -162,7 +162,7 @@ class DRInterventionTest(unittest.TestCase):
         self.run_state("round-score", "N4", "--round", "1", "--total", "9",
                        "--dims", '{"correctness":9,"efficiency":8,"readability":8,"robustness":9,"innovation":9}',
                        "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
         round1 = [r for r in state["rounds"] if r.get("node") == "N4" and r.get("round") == 1][0]
@@ -177,7 +177,7 @@ class DRInterventionTest(unittest.TestCase):
         self.run_state("round-score", "N4", "--round", "1", "--total", "9",
                        "--dims", '{"correctness":9,"efficiency":8,"readability":8,"robustness":9,"innovation":9}',
                        "--judge", "mm-code-reviewer",
-                       "--skills-read", "math-modeling-agent-system:mm-iteration-engine,math-modeling-agent-system:mm-algorithm-dev,math-modeling-agent-system:code-review",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
         round1 = [r for r in state["rounds"] if r.get("node") == "N4" and r.get("round") == 1][0]

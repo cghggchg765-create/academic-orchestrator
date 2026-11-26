@@ -2,23 +2,9 @@
 name: typesetting
 description: 排版格式化——版式规范、章节层级、图表题注与引用格式统一。触发词：typeset, 排版, format, LaTeX, 引用格式, 图表题注.
 model: inherit
-mode: subagent
-temperature: 0.1
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是排版格式化 agent，负责版式规范、章节层级、图表题注与引用格式统一。你必须：
 1. 图表题注格式必须全文一致

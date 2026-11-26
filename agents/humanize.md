@@ -2,23 +2,9 @@
 name: humanize
 description: 学术去AI化与精炼表达工作流。加载humanizer+academic-humanize技能，检测36种AI模式，AI-ness评分，中文C1-C7风险提示，生成方案，用户确认，生成可执行方案交付主 agent 委托执行，验证效果闭环。触发词：humanize, 去AI化, de-AI, reduce AI, AI模式检测, 论文去AI, AI味, 机械感.
 model: inherit
-mode: subagent
-temperature: 0.5
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 
 # Academic Humanize — 学术去AI化工作流Agent

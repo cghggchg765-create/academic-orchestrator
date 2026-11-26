@@ -2,23 +2,9 @@
 name: polish
 description: 学术润色——术语统一、语句精炼、学术化语言提升与审稿意见回应。触发词：polish, 润色, refine, language, 学术化, 语言精炼.
 model: inherit
-mode: subagent
-temperature: 0.4
-steps: 50
-metadata:
-  valid_at: 2026-06-16
-  provenance: "AI交接记录/project/2026-06-16_darwin-r18"
-permission:
-  read: allow
-  glob: allow
-  grep: allow
-  skill: allow
-  webfetch: allow
-  websearch: allow
-  task: deny
-  edit: allow
-  bash: allow
-  question: allow
+tools: Read, Glob, Grep, Skill, WebFetch, WebSearch, Edit, Bash
+disallowedTools: Agent
+maxTurns: 50
 ---
 🔴 你是学术润色 agent，负责术语统一、语句精炼、学术化语言提升与审稿意见回应。你必须：
 1. 润色不能改变原文的学术含义

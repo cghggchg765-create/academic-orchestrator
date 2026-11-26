@@ -172,9 +172,17 @@ def check_version_alignment() -> None:
 
 
 # 组件计数单一来源（skills/agents/commands 的契约数量）。
-# ARS 学术四技能与 16 个 /ars-* 命令已移交 academic-research-skills 插件单独分发，
-# 本插件不再持有副本，因此计数按本插件实际分发包计算。
-EXPECTED_COUNTS = {"skills": 30, "agents": 24, "commands": 6}
+#
+# 口径（2.0.0 academic-orchestrator）：
+#   - 学术能力主体（academic-paper / deep-research / academic-paper-reviewer /
+#     academic-pipeline）、ARIS、nature-* 家族由各自插件/技能库提供，本插件不持有副本。
+#   - 本插件只保留「编排核心 + 数学建模子轨 + 去AI化 + 图表演示/审阅」等原生组件。
+#   - 第三方重复副本已于 2.0.0 物理删除（xlsx / frontend-design / theme-factory /
+#     test-driven-development / systematic-debugging / receiving-code-review /
+#     subagent-driven-development / drawio-skill / make-pdf / investigate），
+#     能力需求改由 mm-skill-router 运行时扫描发现，不再打包分发。
+# 改这个数字前先确认 skills/ 与 agents/ 实际文件数，并用 lint 反向校验。
+EXPECTED_COUNTS = {"skills": 23, "agents": 21, "commands": 7}
 
 
 def check_component_counts() -> None:
@@ -302,7 +310,7 @@ def check_full_pipeline_coverage() -> None:
         if agent not in agent_files:
             error(f"全流程覆盖: 节点执行/审阅 Agent {agent} 无对应 agents/{agent}.md")
     for skill in sorted(expected_skills):
-        # 插件命名空间前缀（math-modeling-agent-system:xxx）→ 目录名（skills/xxx/）
+        # 插件命名空间前缀（academic-orchestrator:xxx）→ 目录名（skills/xxx/）
         base = skill.split(":", 1)[-1] if ":" in skill else skill
         if base not in skill_dirs:
             error(f"全流程覆盖: 必读 Skill {skill} 无对应 skills/{base}/")
@@ -313,11 +321,17 @@ def check_full_pipeline_coverage() -> None:
     for skill in ("humanizer", "academic-humanize"):
         if skill not in skill_dirs:
             error(f"全流程覆盖: 去AI化 Skill {skill} 无对应 skills/{skill}/")
-    # orchestrator 委托文档必须声明完整专业 Agent 集（防"完整流程漏用 Agent"）
-    orch = (ROOT / "agents" / "orchestrator.md").read_text(encoding="utf-8")
-    for agent in sorted(expected_agents | {"humanize"}):
-        if agent not in orch:
-            error(f"全流程覆盖: orchestrator 文档未声明可委托 {agent}")
+    # 编排协议必须声明完整专业 Agent 集（防"完整流程漏用 Agent"）
+    # 2.0.0：编排载体由 agents/orchestrator.md（子 Agent）迁至
+    # skills/academic-orchestration/SKILL.md（主 Agent 协议），因宿主禁止子 Agent 嵌套派发。
+    orch_path = ROOT / "skills" / "academic-orchestration" / "SKILL.md"
+    if not orch_path.exists():
+        error("全流程覆盖: 编排协议 skills/academic-orchestration/SKILL.md 缺失")
+    else:
+        orch = orch_path.read_text(encoding="utf-8")
+        for agent in sorted(expected_agents | {"humanize"}):
+            if agent not in orch:
+                error(f"全流程覆盖: 编排协议未声明可委托 {agent}")
     # 主控 SKILL 全流程覆盖表必须含 humanize（去AI化环节已接入流程）
     master = (ROOT / "skills" / "mathematical-modeling" / "SKILL.md").read_text(encoding="utf-8")
     if "humanize" not in master:
@@ -405,7 +419,7 @@ def check_professional_skill_contract() -> None:
                 continue
             text = (ROOT / "agents" / f"{agent}.md").read_text(encoding="utf-8", errors="ignore")
             # 归一化比较：Agent 文件内按裸名引用（`skill("mm-algorithm-dev")`），
-            # registry 存插件注册名（`math-modeling-agent-system:mm-algorithm-dev`），二者等价。
+            # registry 存插件注册名（`academic-orchestrator:mm-algorithm-dev`），二者等价。
             missing = [s for s in info.get("skills", []) if module.skill_basename(s) not in text]
             if missing:
                 error(f"专业 skill 契约: {node_id} 的 {role} {agent} 未引用必读 skill {missing}（必须加载并声明）")
@@ -454,6 +468,63 @@ def check_user_level_sync() -> None:
         error(f"用户级副本与插件同源不一致: {issue}")
 
 
+def check_gates_registry() -> None:
+    """门禁登记单一事实源：shared/contracts/gates-registry.json ↔ state_defs NODES.gates。
+
+    防漂移：登记表里出现的门禁必须被某节点声明，节点声明的门禁也必须在登记表里有定义。
+    B1 这类跨节点门禁在登记表中以 "N6,N7,N8" 声明，逐个节点比对。
+    """
+    reg_path = ROOT / "shared" / "contracts" / "gates-registry.json"
+    if not reg_path.exists():
+        error("门禁登记表缺失: shared/contracts/gates-registry.json")
+        return
+    reg = json.loads(reg_path.read_text(encoding="utf-8"))
+    declared = set()
+    for g in reg.get("gates", []):
+        gid = g.get("id")
+        if not gid:
+            error("门禁登记表存在无 id 的条目")
+            continue
+        declared.add(gid)
+        for node in str(g.get("node", "")).split(","):
+            node = node.strip()
+            if not node:
+                continue
+        for key in ("timing", "kind", "blocking", "criterion", "producer"):
+            if not g.get(key):
+                error(f"门禁 {gid} 缺字段 {key}")
+    source = ROOT / "shared" / "state-engine" / "state_utils.py"
+    spec = importlib.util.spec_from_file_location("mm_state_utils_g", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    used = set()
+    for node_id, info in module.NODES.items():
+        for gate in info.get("gates", []):
+            used.add(gate)
+    # 迭代动态门禁（S<n>-Nx）不静态登记
+    for gate in sorted(used - declared):
+        error(f"门禁 {gate} 在 NODES 中被使用但未登记于 gates-registry.json")
+    for gate in sorted(declared - used):
+        error(f"门禁 {gate} 已登记于 gates-registry.json 但无任何节点使用（孤儿门禁）")
+
+
+def check_benchmark_contract() -> None:
+    """图表对标契约：B1 门禁必须有专职审阅 Agent + 对标 skill + 矩阵 schema 三者齐备。"""
+    b1_agents = [p for p in (ROOT / "agents").glob("*.md") if "mm-figure-table-benchmarker" in p.name]
+    if not b1_agents:
+        error("B1 门禁缺少专职审阅 Agent: agents/mm-figure-table-benchmarker.md")
+    if not (ROOT / "skills" / "figure-table-benchmark" / "SKILL.md").exists():
+        error("B1 门禁缺少对标规范 skill: skills/figure-table-benchmark/SKILL.md")
+    if not (ROOT / "skills" / "figure-table-benchmark" / "references" / "benchmark-matrix.schema.json").exists():
+        error("B1 门禁缺少矩阵 schema: skills/figure-table-benchmark/references/benchmark-matrix.schema.json")
+    reg = json.loads((ROOT / "shared" / "contracts" / "gates-registry.json").read_text(encoding="utf-8"))
+    b1 = [g for g in reg.get("gates", []) if g.get("id") == "B1"]
+    if not b1:
+        error("B1 门禁未登记于 gates-registry.json")
+    elif "mm-figure-table-benchmarker" not in b1[0].get("producer", ""):
+        error("B1 门禁的 producer 必须为 mm-figure-table-benchmarker")
+
+
 def main() -> int:
     scan_markdown()
     check_registry()
@@ -469,6 +540,8 @@ def main() -> int:
     check_all_components_referenced()
     check_agent_boundaries()
     check_professional_skill_contract()
+    check_gates_registry()
+    check_benchmark_contract()
     check_user_level_sync()
     if ERRORS:
         print("契约检查失败:")
