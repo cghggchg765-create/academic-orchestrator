@@ -1,0 +1,44 @@
+{
+  "name": "math-modeling-agent-system",
+  "description": "学术研究与数学建模多智能体协同系统（通用学术 + 建模双轨）。通用学术能力：论文写作与修订、深度研究、文献综述、模拟同行评审、去 AI 化润色、数据分析与统计解释、出版级绘图、LaTeX 排版编译、PDF/Excel/图示交付；数学建模专项：9 阶段全链路、迭代引擎、模型库与调优、赛题拆解。30 个 Skill + 24 个 Agent + 6 个命令。写论文、改论文、审稿、综述、做图、排版、数据分析、建模竞赛均可调用。学术四技能（academic-paper / deep-research / academic-paper-reviewer / academic-pipeline）由 academic-research-skills 插件提供，本插件通过命令前缀与引用协作。遇到更专用的 skill（spreadsheets:xlsx、presentations:pptx、documents:docx）时按任务择优。",
+  "description_i18n": {
+    "en": "Academic research + math-modeling multi-agent system (30 skills / 24 agents / 6 commands). General academic: paper writing & revision, deep research, literature review, simulated peer review, de-AI polishing, data analysis, publication-grade figures, LaTeX, PDF/Excel deliverables. Plus math-modeling track (9-phase pipeline, iteration engine). Academic 4-skill suite is provided by the academic-research-skills plugin.",
+    "zh-CN": "学术研究与数学建模多智能体协同系统（通用学术 + 建模双轨）。通用学术能力：论文写作与修订、深度研究、文献综述、模拟同行评审、去 AI 化润色、数据分析与统计解释、出版级绘图、LaTeX 排版编译、PDF/Excel/图示交付；数学建模专项：9 阶段全链路、迭代引擎、模型库与调优、赛题拆解。30 个 Skill + 24 个 Agent + 6 个命令。写论文、改论文、审稿、综述、做图、排版、数据分析、建模竞赛均可调用。学术四技能（academic-paper / deep-research / academic-paper-reviewer / academic-pipeline）由 academic-research-skills 插件提供，本插件通过命令前缀与引用协作。遇到更专用的 skill（spreadsheets:xlsx、presentations:pptx、documents:docx）时按任务择优。"
+  },
+  "version": "1.8.0",
+  "author": {
+    "name": "math-modeling-agent-system",
+    "url": "https://github.com/"
+  },
+  "keywords": [
+    "academic-writing",
+    "paper",
+    "literature-review",
+    "peer-review",
+    "deep-research",
+    "data-analysis",
+    "visualization",
+    "latex",
+    "pdf",
+    "math-modeling",
+    "CUMCM",
+    "学术写作",
+    "论文",
+    "文献综述",
+    "审稿",
+    "深度研究",
+    "数据分析",
+    "可视化",
+    "数学建模"
+  ],
+  "skills": [
+    "skills"
+  ],
+  "agents": [
+    "agents"
+  ],
+  "commands": [
+    "commands"
+  ],
+  "icon": "📐"
+}

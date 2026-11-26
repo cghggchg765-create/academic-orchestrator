@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "_comment": "=== 迭代 SEARCH 步骤的检索地址注册表 === 按实际需求选源（需求→渠道映射见 SKILL §12），init 生成，可手工扩充（search-source add）。以 state_utils.py 内置默认值为准。",
+  "sources": [
+    {
+      "id": "github-code",
+      "type": "开源项目/代码",
+      "name": "GitHub Code Search",
+      "address": "https://github.com/search?q=<QUERY>&type=code / gitee.com / gitlab.com",
+      "tool": "gh_grep searchGitHub + WebSearch",
+      "query_template": "<题型关键词> <算法名> python",
+      "apply_when": ["需要参考实现", "需要开源代码"],
+      "priority": 1
+    },
+    {
+      "id": "paper-academic",
+      "type": "论文/算法",
+      "name": "arXiv / OpenAlex / Semantic Scholar",
+      "address": "https://arxiv.org / https://api.openalex.org/works?search=<QUERY> / https://api.semanticscholar.org",
+      "tool": "paper-mcp paper_search + WebSearch",
+      "query_template": "<方法名> <问题域>",
+      "apply_when": ["需要方法论论文", "需要算法原理"],
+      "priority": 2
+    },
+    {
+      "id": "paperswithcode",
+      "type": "论文+代码对照",
+      "name": "Papers with Code",
+      "address": "https://paperswithcode.com",
+      "tool": "WebSearch / WebFetch",
+      "query_template": "<任务名> state of the art",
+      "apply_when": ["需要论文+官方实现成对证据"],
+      "priority": 3
+    },
+    {
+      "id": "contest-papers",
+      "type": "竞赛优秀论文",
+      "name": "数学中国 / CUMCM 优秀论文库 / GitHub 数模仓库",
+      "address": "http://www.madio.net / CUMCM 官网历年优秀论文 / github.com（MathModel-with-python 等数模仓库）",
+      "tool": "WebSearch / WebFetch",
+      "query_template": "CUMCM <年份> <题号> 优秀论文 <方法>",
+      "apply_when": ["需要获奖论文参照", "评分点对齐"],
+      "priority": 2
+    },
+    {
+      "id": "lib-docs",
+      "type": "库/框架文档",
+      "name": "Context7",
+      "address": "https://context7.com/<lib>",
+      "tool": "context7 resolve-library-id + query-docs",
+      "query_template": "<库名> <API/用法>",
+      "apply_when": ["不确定库 API", "报错排查"],
+      "priority": 4
+    },
+    {
+      "id": "model-zoo",
+      "type": "预训练模型/数据",
+      "name": "HuggingFace",
+      "address": "https://huggingface.co/models / https://huggingface.co/datasets",
+      "tool": "WebSearch / WebFetch",
+      "query_template": "<任务> <数据形态> dataset/model",
+      "apply_when": ["需要数据集", "需要预训练模型"],
+      "priority": 5
+    },
+    {
+      "id": "zh-knowledge",
+      "type": "中文方法线索（非权威源）",
+      "name": "知乎 / CSDN / 博客园",
+      "address": "zhihu.com / csdn.net / cnblogs.com",
+      "tool": "WebSearch",
+      "query_template": "<题型> 数学建模 <方法>",
+      "apply_when": ["仅作线索，落地前回源头验证"],
+      "priority": 6
+    }
+  ]
+}

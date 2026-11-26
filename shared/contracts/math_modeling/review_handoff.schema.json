@@ -1,0 +1,16 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"math-modeling/review-handoff.schema.json",
+  "title":"Math Modeling Review Handoff",
+  "type":"object",
+  "required":["schema_version","project_id","review_id","role","decision","findings"],
+  "properties":{
+    "schema_version":{"type":"string"},
+    "project_id":{"type":"string"},
+    "review_id":{"type":"string"},
+    "role":{"enum":["model_critic","numerical_auditor","claim_fidelity_auditor","competition_reviewer"]},
+    "decision":{"enum":["PASS","PASS_WITH_REVIEW","BLOCKED","FAIL"]},
+    "findings":{"type":"array","items":{"type":"object","required":["id","severity","message"],"properties":{"id":{"type":"string"},"severity":{"enum":["INFO","LOW","MEDIUM","HIGH","CRITICAL"]},"message":{"type":"string"},"evidence":{"type":"array","items":{"type":"string"}},"affected_claims":{"type":"array","items":{"type":"string"}},"repair_route":{"enum":["modeling","preprocessing","coding","experiment","result_ledger","writing","manual_review",null]}}}},
+    "retry":{"type":"object","properties":{"allowed":{"type":"boolean"},"count":{"type":"integer","minimum":0},"max":{"type":"integer","minimum":0},"failure_type":{"type":"string"}}}
+  }
+}

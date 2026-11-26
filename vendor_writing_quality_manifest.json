@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "scope": "plugin-only; no local model or model weights",
+  "policy": "External projects are rule and evaluation references. Text generation remains with the host Agent LM.",
+  "candidates": [
+    {"id":"languagetool","url":"https://github.com/languagetool-org/languagetool","license":"LGPL-2.1","role":"grammar_style_check","status":"reference_only","downloaded":false,"notes":"Optional local/server integration; Chinese coverage requires validation."},
+    {"id":"vale","url":"https://github.com/errata-ai/vale","license":"MIT","role":"style_lint","status":"reference_only","downloaded":false,"notes":"Use project rules as inspiration; no runtime dependency in plugin."},
+    {"id":"proselint","url":"https://github.com/amperser/proselint","license":"BSD-3-Clause","role":"english_prose_lint","status":"reference_only","downloaded":false,"notes":"English-only auxiliary reference."},
+    {"id":"textstat","url":"https://github.com/textstat/textstat","license":"MIT","role":"text_metrics","status":"reference_only","downloaded":false,"notes":"Metrics ideas only; no runtime dependency."},
+    {"id":"binoculars","url":"https://github.com/ahans30/Binoculars","license":"unverified","role":"research_detector","status":"deferred","downloaded":false,"notes":"Not used as an authorship or quality gate; model and license terms require separate review."}
+  ],
+  "excluded": [
+    "Transformers model weights",
+    "PEFT/LoRA training",
+    "local inference servers",
+    "GPU-dependent rewriting models"
+  ]
+}

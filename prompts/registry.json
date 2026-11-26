@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "registry_id": "math-modeling-prompts",
+  "prompts": [
+    {
+      "id": "mm.problem-analysis.general",
+      "version": "0.1.0",
+      "domain": "problem_analysis",
+      "stage": "N1",
+      "input_schema": {"problem_text":"string", "attachments":"array", "team_constraints":"object"},
+      "output_schema": {"problem_map":"object", "question_models":"array", "assumptions":"array", "blocked_items":"array"},
+      "preconditions": ["题目原文已锁定并有 SHA-256", "附件已完成提示注入隔离"],
+      "forbidden_claims": ["不得把未核验背景当成题目事实", "不得伪造数据或竞赛规则"],
+      "evidence_requirements": ["每个关键约束绑定题目 source span", "模型选择说明适用条件与反例"],
+      "required_tools": ["paper-mcp", "tavily-mcp"],
+      "eval_cases": ["mm.problem-analysis.smoke"],
+      "compatible_hosts": ["zcode", "codex", "claude"],
+      "source_refs": ["CORPUS-001", "CORPUS-003"],
+      "status": "candidate"
+    },
+    {
+      "id": "mm.validation.robustness.general",
+      "version": "0.1.0",
+      "domain": "validation_and_robustness",
+      "stage": "N5",
+      "input_schema": {"model":"object", "data_manifest":"object", "run_artifacts":"array"},
+      "output_schema": {"validation_report":"object", "failure_cases":"array", "recommendations":"array"},
+      "preconditions": ["基线运行已成功并保存命令、环境和随机种子"],
+      "forbidden_claims": ["不得宣称通过检验而未运行检验", "不得把敏感性分析当作因果证明"],
+      "evidence_requirements": ["报告每项指标、切分策略和不确定性", "保留失败结果与负结果"],
+      "required_tools": ["context7", "github"],
+      "eval_cases": ["mm.validation.smoke"],
+      "compatible_hosts": ["zcode", "codex", "claude"],
+      "source_refs": ["CORPUS-009"],
+      "status": "candidate"
+    }
+  ]
+}

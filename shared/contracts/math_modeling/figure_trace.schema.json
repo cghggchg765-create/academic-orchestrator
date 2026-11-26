@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "math-modeling/figure-trace.schema.json",
+  "title": "Math Modeling Figure and Claim Trace",
+  "type": "object",
+  "required": ["schema_version", "project_id", "traces"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "project_id": {"type": "string"},
+    "traces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["trace_id", "source_data", "transformation", "output", "manuscript_claim"],
+        "properties": {
+          "trace_id": {"type": "string"},
+          "source_data": {"type": "array", "items": {"type": "object", "required": ["artifact_id", "path"]}},
+          "transformation": {"type": "object", "required": ["script", "script_hash"]},
+          "output": {"type": "object", "required": ["artifact_id", "path", "kind"]},
+          "caption": {"type": "object"},
+          "manuscript_claim": {"type": "object", "required": ["claim_id", "locator"]},
+          "limitations": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

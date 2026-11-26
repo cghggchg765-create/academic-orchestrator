@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "purpose": "独立评审、问题修复与复跑协议",
+  "review_verdicts": ["PASS", "FAIL", "BLOCKED"],
+  "decision_actions": ["continue", "pass_continue", "early_stop", "max_rounds_pass", "plateau_pass", "budget_pass", "keep_best", "repair_and_rerun", "escalated"],
+  "independence": {
+    "rule": "评分 Agent 必须与执行 Agent 不同",
+    "exception_nodes": ["N8"],
+    "exception_reason": "终稿节点由 reviewer 生成终审报告，但不得给自己产生的业务修改评分"
+  },
+  "required_review_fields": ["agent_id", "node_id", "run_id", "skills_read", "evidence", "verdict", "issues", "feedback"],
+  "repair_loop": {
+    "max_attempts": 2,
+    "on_fail": "由执行 Agent 按 feedback 修改后重新运行同一检查",
+    "on_exhausted": "escalated",
+    "must_preserve": ["original_run_id", "reviewer_id", "evidence", "issue_history"]
+  },
+  "issue_categories": [
+    "sensitivity_failure",
+    "error_analysis_failure",
+    "robustness_failure",
+    "reproducibility_failure",
+    "latex_compile_failure",
+    "reference_failure",
+    "artifact_missing",
+    "contract_failure"
+  ],
+  "rules": [
+    "发现灵敏度分析、误差分析或鲁棒性问题后，不得直接宣称通过",
+    "执行 Agent 只能依据独立评审 feedback 修改，修改后必须重跑原始实验并保留新证据",
+    "评分 Agent 必须先读取对应评审 Skill，并在 result.json 的 skills_read 中声明版本",
+    "评分只允许基于可追溯的运行证据、产物哈希和评审记录",
+    "独立评分失败或不可执行时，状态为 BLOCKED，不得降级为 PASS"
+  ]
+}

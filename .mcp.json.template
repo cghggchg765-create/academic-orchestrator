@@ -1,0 +1,57 @@
+{
+  "mcpServers": {
+    "paper-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PAPER_MCP_INDEX}"
+      ],
+      "description": "论文搜索 MCP · 替换 ${PAPER_MCP_INDEX} 为本机 build/index.js 绝对路径",
+      "enabled": true
+    },
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp",
+      "description": "Context7 算法技术 MCP（远程，开箱可用）",
+      "enabled": true
+    },
+    "github": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PAT}"
+      },
+      "description": "GitHub MCP · 替换 ${GITHUB_PAT}",
+      "enabled": true
+    },
+    "tavily-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.tavily.com/mcp/?tavilyApiKey=${TAVILY_API_KEY}"
+      ],
+      "description": "Tavily 全网搜索 MCP · 替换 ${TAVILY_API_KEY}",
+      "enabled": true
+    },
+    "tokenhub-tools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@tokenhub/mcp"
+      ],
+      "env": {
+        "TOKENHUB_API_KEY": "${TOKENHUB_API_KEY}",
+        "TOKENHUB_BASE_URL": "https://api.tokenhub.market"
+      },
+      "description": "Tavily 回退 MCP · 替换 ${TOKENHUB_API_KEY}",
+      "enabled": true
+    }
+  }
+}

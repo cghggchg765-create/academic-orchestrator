@@ -1,0 +1,88 @@
+{
+  "schema_version": "2.0",
+  "mode": "plugin_only",
+  "status": "PASS",
+  "results": [
+    {
+      "id": "zh-mm-001",
+      "mode": "candidate",
+      "language": "zh",
+      "domain": "mathematical_modeling",
+      "status": "PASS",
+      "decision": "PASS",
+      "checks": {
+        "protected_detected": true,
+        "protected_fidelity": true,
+        "changed": true,
+        "claim_fidelity": true,
+        "citation_fidelity": true,
+        "numeric_fidelity": true,
+        "term_fidelity": true,
+        "equation_fidelity": true
+      },
+      "failure_reasons": [],
+      "blocked_items": [],
+      "original_sha256": "c6706ec02a1da727107d1d6e54b03b58d58ccde901a9ef12280596e7d8bcd4f4",
+      "candidate_sha256": "274965cb4067d88515539c20e245c6a18de1c51bd8001d673c7395418174cc79",
+      "original_length": 34,
+      "candidate_length": 28,
+      "review_required": false
+    },
+    {
+      "id": "zh-mm-002",
+      "mode": "candidate",
+      "language": "zh",
+      "domain": "mathematical_modeling",
+      "status": "PASS",
+      "decision": "PASS",
+      "checks": {
+        "protected_detected": true,
+        "protected_fidelity": true,
+        "changed": true,
+        "claim_fidelity": true,
+        "citation_fidelity": true,
+        "numeric_fidelity": true,
+        "term_fidelity": true,
+        "equation_fidelity": true
+      },
+      "failure_reasons": [],
+      "blocked_items": [],
+      "original_sha256": "e854cdc57031bb3281c4496b0256bc7e63ab8ad08d13fc1b8b649bb409b9d449",
+      "candidate_sha256": "a7ce6f9d20c0f02a903fdc6dfd05aa5a6e03b2b325afc368a90ea18d58fd95bf",
+      "original_length": 22,
+      "candidate_length": 26,
+      "review_required": true
+    },
+    {
+      "id": "zh-mm-003",
+      "mode": "candidate",
+      "language": "zh",
+      "domain": "mathematical_modeling",
+      "status": "PASS",
+      "decision": "PASS",
+      "checks": {
+        "protected_detected": true,
+        "protected_fidelity": false,
+        "changed": true,
+        "claim_fidelity": true,
+        "citation_fidelity": true,
+        "numeric_fidelity": false,
+        "term_fidelity": true,
+        "equation_fidelity": false
+      },
+      "failure_reasons": [
+        "PROTECTED_TOKEN_MISSING",
+        "PROTECTED_TOKEN_ORDER_OR_CONTENT_CHANGED"
+      ],
+      "blocked_items": [
+        "PROTECTED_TOKEN_MISSING",
+        "PROTECTED_TOKEN_ORDER_OR_CONTENT_CHANGED"
+      ],
+      "original_sha256": "65824ce7869ace2f11edab5b71bc725db71051c6a9f34ec66c0964e074f8a7d5",
+      "candidate_sha256": "a5180a10c8e24f0ae7954244fdce4a74710596bafeb95c84762564162dd3689a",
+      "original_length": 27,
+      "candidate_length": 27,
+      "review_required": false
+    }
+  ]
+}

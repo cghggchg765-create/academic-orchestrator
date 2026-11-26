@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "math-modeling/result-ledger.schema.json",
+  "title": "Mathematical Modeling Result Ledger",
+  "type": "object",
+  "required": ["schema_version", "project_id", "results"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "project_id": {"type": "string"},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["result_id", "metric", "value", "source"],
+        "properties": {
+          "result_id": {"type": "string"},
+          "run_id": {"type": "string"},
+          "metric": {"type": "string"},
+          "value": {},
+          "unit": {"type": "string"},
+          "source": {
+            "type": "object",
+            "required": ["path"],
+            "properties": {
+              "path": {"type": "string"},
+              "json_path": {"type": "string"},
+              "hash": {"type": "string"}
+            }
+          },
+          "rounding_rule": {"type": "string"},
+          "used_in": {"type": "array", "items": {"type": "object"}},
+          "claim_ids": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

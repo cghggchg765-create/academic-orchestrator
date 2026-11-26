@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "name": "sync-and-compatibility",
+  "purpose": "对已有论文、代码和数据进行兼容接入，先审阅与修复代码，再允许论文重写和格式转换",
+  "input_contract": {
+    "required": ["existing_code", "existing_data", "existing_paper"],
+    "paper_formats": ["markdown", "latex", "pdf"],
+    "code_formats": ["python", "r", "matlab", "julia"],
+    "data_formats": ["csv", "xlsx", "json", "parquet", "txt"]
+  },
+  "phases": [
+    {
+      "id": "intake",
+      "name": "现有材料接入",
+      "executor": "orchestrator",
+      "outputs": ["compatibility_manifest.json", "source_inventory.md"],
+      "checks": ["paper-readable", "code-entrypoint-detected", "data-source-traceable"]
+    },
+    {
+      "id": "code_review",
+      "name": "代码审阅与更新",
+      "executor": "coder",
+      "reviewer": "mm-code-reviewer",
+      "required_skills": ["mm-algorithm-dev", "mm-iteration-engine", "code-review"],
+      "must_complete_before": ["paper_rewrite", "markdown_to_latex"],
+      "outputs": ["code_review_report", "updated_code", "run_evidence", "code_gate"]
+    },
+    {
+      "id": "data_validation",
+      "name": "数据一致性验证",
+      "executor": "dataprep",
+      "reviewer": "reviewer",
+      "required_skills": ["mm-data-preprocessing", "mm-self-review"],
+      "must_complete_before": ["paper_rewrite", "markdown_to_latex"],
+      "outputs": ["data_quality_report", "data_lineage", "data_gate"]
+    },
+    {
+      "id": "paper_rewrite",
+      "name": "论文改写",
+      "executor": "writing",
+      "reviewer": "reviewer",
+      "required_skills": ["mm-latex-writing", "mm-self-review"],
+      "preconditions": ["code_gate >= pass", "data_gate == PASS", "run_evidence_available"],
+      "outputs": ["paper_draft", "claim_evidence_map", "rewrite_report"]
+    },
+    {
+      "id": "markdown_to_latex",
+      "name": "Markdown 转 LaTeX",
+      "executor": "writing",
+      "reviewer": "reviewer",
+      "required_skills": ["mm-latex-writing", "mm-self-review"],
+      "preconditions": ["paper_rewrite completed", "code_gate >= pass", "data_gate == PASS"],
+      "outputs": ["ReportPaper/LaTeX/main.tex", "ReportPaper/LaTeX/sections", "ReportPaper/LaTeX/ref.bib", "compiled_pdf"],
+      "rules": [
+        "Markdown 是输入格式，不作为最终交付源",
+        "LaTeX 是唯一可维护文档源",
+        "PDF 只能由 LaTeX 编译生成，不手工编辑或反向覆盖 LaTeX",
+        "转换后必须检查章节、公式、图表、表格、引用和交叉引用"
+      ]
+    }
+  ],
+  "quality_gates": {
+    "code_gate": {"minimum": 7.0, "target": 8.0, "dimensions": ["correctness", "efficiency", "readability", "robustness", "reproducibility"]},
+    "data_gate": {"required": ["missingness_checked", "outliers_checked", "lineage_recorded", "train_test_policy_recorded"]},
+    "paper_gate": {"required": ["claims_trace_to_evidence", "no_unverified_numbers", "latex_compiles", "references_resolve"]}
+  },
+  "repair_policy": {
+    "trigger": ["code_review_fail", "data_gate_fail", "sensitivity_failure", "error_analysis_failure", "latex_compile_failure"],
+    "owner": "original_executor",
+    "reviewer_must_remain_independent": true,
+    "max_attempts": 2,
+    "after_max_attempts": "escalated",
+    "rerun_required": true,
+    "preserve_history": true
+  }
+}

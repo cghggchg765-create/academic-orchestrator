@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "prompt": "Humanize this email draft:\n\nI hope this message finds you well. I am writing to follow up on our conversation from last week regarding the upcoming project timeline. It's important to note that we have made significant progress on the initial deliverables, and I am pleased to report that the team has exceeded expectations. Additionally, we have identified a few areas that may require further attention. Please let me know if you have any questions or concerns. I look forward to hearing from you at your earliest convenience.",
+    "expected": "AI-ness Score ≥0.5, with detections including hedging openers ('It's important to note'), formulaic structure, hollow intensifiers ('significant', 'pleased'), and forced pleasantries. Rewrite should cut throat-clearing, use contractions, vary sentence length, and produce a natural professional email under 80 words without losing key information."
+  },
+  {
+    "id": 2,
+    "prompt": "Does this sound AI-generated? If so, make it more natural:\n\nIt is worth mentioning that our cutting-edge solution leverages state-of-the-art machine learning algorithms to fundamentally transform the way businesses approach data-driven decision-making. Moreover, our platform seamlessly integrates with existing infrastructure, thereby ensuring minimal disruption to ongoing operations. Interestingly, we have observed a remarkable 47% improvement in efficiency among early adopters.",
+    "expected": "AI-ness Score ≥0.6 with strong hits on hedging openers ('It is worth mentioning', 'Interestingly'), hollow intensifiers ('cutting-edge', 'remarkable', 'fundamentally', 'seamlessly'), and exhaustive listing structure. Rewrite should strip all 3 throat-clearing openers, replace 'seamlessly'/'fundamentally' with concrete language, and tighten to a single direct paragraph that conveys the same facts naturally."
+  },
+  {
+    "id": 3,
+    "prompt": "I wrote this myself but my professor said it sounds like AI. Can you check and fix?\n\nIn recent years, there has been a growing interest in the field of natural language processing. This paper aims to provide a comprehensive overview of the current state of transformer-based architectures. First, we discuss the fundamental principles of the attention mechanism. Next, we examine the key innovations introduced by BERT and GPT. Finally, we explore potential future directions and open challenges in the field. We believe that this analysis will serve as a valuable resource for researchers seeking to understand the landscape of modern NLP.",
+    "expected": "This is a borderline case — structurally formulaic (First/Next/Finally) with AI-typical symmetrical structure, but not heavily loaded with obvious AI tells. AI-ness Score likely 0.3–0.5. Skill should identify the 'First/Next/Finally' scaffolding, the 'comprehensive overview' filler, and the 'valuable resource' closer as the main issues, apply minimal correction (vary transitions, cut generic descriptors), and preserve the student's original voice."
+  }
+]

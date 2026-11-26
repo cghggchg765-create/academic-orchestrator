@@ -1,0 +1,213 @@
+{
+  "_comment": "=== 调用路由注册表 (registry) === 任务→执行 Agent→配对审阅 Agent→必读 Skill→门禁→产物。与 mm-iteration-engine/SKILL.md §6.1 表格双份一致。任何委派必须与本表匹配。迭代动态门禁 S<n>-<节点> 未列于此（运行时由 round-score 创建）。以 state_utils.py 的 init 输出为准。",
+  "version": "1.0",
+  "nodes": [
+    {
+      "id": "N1",
+      "name": "选题拆解",
+      "trigger_phrases": [
+        "分析这道题",
+        "选哪道",
+        "题目拆解",
+        "审题"
+      ],
+      "executor": "selector",
+      "reviewer": "reviewer",
+      "review_mode": "node-review",
+      "required_skills": [
+        "mm-problem-analysis",
+        "mm-self-review"
+      ],
+      "gates": [
+        "M1",
+        "H1"
+      ],
+      "artifact_dir": "ProblemInfo/",
+      "homepage": "state/nodes/选题拆解/dashboard.md",
+      "upstream": [
+        "N0"
+      ]
+    },
+    {
+      "id": "N2",
+      "name": "数据处理",
+      "trigger_phrases": [
+        "处理数据",
+        "数据清洗",
+        "预处理",
+        "特征工程"
+      ],
+      "executor": "dataprep",
+      "reviewer": "reviewer",
+      "review_mode": "node-review",
+      "required_skills": [
+        "mm-data-preprocessing"
+      ],
+      "gates": [
+        "D1"
+      ],
+      "artifact_dir": "Data/",
+      "homepage": "state/nodes/数据处理/dashboard.md",
+      "upstream": [
+        "N1"
+      ]
+    },
+    {
+      "id": "N3",
+      "name": "建模",
+      "trigger_phrases": [
+        "选模型",
+        "怎么建模",
+        "建模方案",
+        "公式推导"
+      ],
+      "executor": "modeler",
+      "reviewer": "reviewer",
+      "review_mode": "node-review",
+      "required_skills": [
+        "mm-model-library"
+      ],
+      "gates": [
+        "P1"
+      ],
+      "artifact_dir": "ModelDocs/",
+      "homepage": "state/nodes/建模/dashboard.md",
+      "upstream": [
+        "N1",
+        "N2"
+      ]
+    },
+    {
+      "id": "N4",
+      "name": "代码/代码迭代",
+      "trigger_phrases": [
+        "写代码",
+        "实现算法",
+        "代码迭代",
+        "修代码",
+        "算法开发"
+      ],
+      "executor": "coder",
+      "reviewer": "mm-code-reviewer",
+      "review_mode": "code-score",
+      "required_skills": [
+        "mm-iteration-engine",
+        "mm-algorithm-dev",
+        "code-review"
+      ],
+      "gates": [
+        "P2",
+        "A1",
+        "H2"
+      ],
+      "artifact_dir": "Code/",
+      "homepage": "state/nodes/代码/dashboard.md",
+      "upstream": [
+        "N3"
+      ]
+    },
+    {
+      "id": "N5",
+      "name": "调优",
+      "trigger_phrases": [
+        "调参",
+        "调优",
+        "优化模型",
+        "敏感性分析"
+      ],
+      "executor": "tuner",
+      "reviewer": "mm-code-reviewer",
+      "review_mode": "tune-check",
+      "required_skills": [
+        "mm-model-tuning",
+        "mm-iteration-engine"
+      ],
+      "gates": [
+        "T1"
+      ],
+      "artifact_dir": "ModelDocs/",
+      "homepage": "state/nodes/调优/dashboard.md",
+      "upstream": [
+        "N4"
+      ]
+    },
+    {
+      "id": "N6",
+      "name": "图表",
+      "trigger_phrases": [
+        "画图",
+        "生成图表",
+        "可视化"
+      ],
+      "executor": "visualization",
+      "reviewer": "mm-viz-reviewer",
+      "review_mode": "viz-check",
+      "required_skills": [
+        "mm-visualization",
+        "mm-iteration-engine"
+      ],
+      "gates": [
+        "V1"
+      ],
+      "artifact_dir": "Code/output/figures, ResultFigures/",
+      "homepage": "state/nodes/图表/dashboard.md",
+      "upstream": [
+        "N4",
+        "N5"
+      ]
+    },
+    {
+      "id": "N7",
+      "name": "论文/论文修改",
+      "trigger_phrases": [
+        "写论文",
+        "论文初稿",
+        "论文修改",
+        "改论文"
+      ],
+      "executor": "writing",
+      "reviewer": "reviewer",
+      "review_mode": "paper-review",
+      "required_skills": [
+        "mm-iteration-engine",
+        "mm-latex-writing",
+        "mm-self-review"
+      ],
+      "gates": [
+        "W1",
+        "A2",
+        "W2",
+        "H3"
+      ],
+      "artifact_dir": "ReportPaper/",
+      "homepage": "state/nodes/论文/dashboard.md",
+      "upstream": [
+        "N6"
+      ]
+    },
+    {
+      "id": "N8",
+      "name": "评审",
+      "trigger_phrases": [
+        "检查论文",
+        "评审",
+        "终审",
+        "自检"
+      ],
+      "executor": "reviewer",
+      "reviewer": "reviewer",
+      "review_mode": "final-review",
+      "required_skills": [
+        "mm-self-review"
+      ],
+      "gates": [
+        "A3"
+      ],
+      "artifact_dir": "SubmissionPackage/",
+      "homepage": "state/nodes/评审/dashboard.md",
+      "upstream": [
+        "N7"
+      ]
+    }
+  ]
+}

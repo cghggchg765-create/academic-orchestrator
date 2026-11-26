@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mathmodel.local/prompts/spec.schema.json",
+  "title": "Math Modeling PromptSpec",
+  "type": "object",
+  "required": ["id", "version", "domain", "stage", "input_schema", "output_schema", "preconditions", "forbidden_claims", "evidence_requirements", "required_tools", "eval_cases", "compatible_hosts"],
+  "properties": {
+    "id": {"type":"string", "pattern":"^[a-z][a-z0-9_.-]+$"},
+    "version": {"type":"string", "pattern":"^[0-9]+[.][0-9]+[.][0-9]+$"},
+    "domain": {"type":"string", "minLength":1},
+    "stage": {"type":"string", "pattern":"^N[0-8]$|^phase_[0-8]$"},
+    "input_schema": {"type":"object"},
+    "output_schema": {"type":"object"},
+    "preconditions": {"type":"array", "items":{"type":"string"}},
+    "forbidden_claims": {"type":"array", "items":{"type":"string"}},
+    "evidence_requirements": {"type":"array", "items":{"type":"string"}},
+    "required_tools": {"type":"array", "items":{"type":"string"}},
+    "eval_cases": {"type":"array", "items":{"type":"string"}},
+    "compatible_hosts": {"type":"array", "items":{"type":"string"}},
+    "source_refs": {"type":"array", "items":{"type":"string"}},
+    "status": {"type":"string", "enum":["candidate","active","deprecated"]}
+  },
+  "additionalProperties": false
+}

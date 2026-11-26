@@ -1,0 +1,15 @@
+\documentclass{ctexart}
+\begin{document}
+\section{摘要}
+本文针对销量预测问题，建立线性回归加季节项模型（公式\ref{eq:1}），交叉验证MAE=4.007。
+\section{模型建立与求解}
+\begin{equation}
+sales = \beta_0 + \beta_1 t + \beta_2 \sin(2\pi t/6) + \varepsilon \label{eq:1}
+\end{equation}
+结果如图\ref{fig:1}所示。
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.6\linewidth]{../06-图表/图1-销量拟合对比.png}
+\caption{销量拟合对比}\label{fig:1}
+\end{figure}
+\end{document}

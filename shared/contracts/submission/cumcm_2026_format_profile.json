@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mathmodel.local/cumcm/2026-format-profile.json",
+  "profile_id": "cumcm-2026-strict",
+  "profile_version": "1.0",
+  "status": "project-default",
+  "source_policy": "Use the current-year official CUMCM format notice when it differs; this profile is the repository default until updated.",
+  "page_sequence": {
+    "page_1": {"name": "commitment", "page_number": null},
+    "page_2": {"name": "team_number", "page_number": null},
+    "page_3": {"name": "abstract", "page_number": 1, "max_pages": 1},
+    "body": {"first_pdf_page": 4, "max_pages": 30, "counting": "exported_pdf_pages_only"},
+    "appendix": {"starts_after_body": true, "max_pages": null, "counting": "unlimited"}
+  },
+  "toc": {"allowed": false},
+  "page_numbers": {"body_and_appendix": "arabic_center_footer", "commitment": false, "team_number": false},
+  "file_limits_mb": {"paper_pdf": 20, "support_package": 20, "same_file": false},
+  "submission_separation": "paper PDF and support package are separate files; never merge the support archive into the PDF",
+  "support_package": {"required": true, "must_include": ["runnable_source_code", "external_raw_data_when_applicable", "reproducibility_notes"]}
+}

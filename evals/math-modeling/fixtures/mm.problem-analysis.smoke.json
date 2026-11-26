@@ -1,0 +1,10 @@
+{
+  "id": "mm.problem-analysis.smoke",
+  "version": "1.0.0",
+  "domain": "problem_analysis",
+  "stage": "N1",
+  "input": {"problem_text": "某城市希望在预算约束下配置充电站，要求覆盖需求并最小化建设成本。", "attachments": [], "team_constraints": {"language": "python"}},
+  "must_identify": ["optimization", "budget constraint", "coverage demand", "decision variables"],
+  "must_not_claim": ["真实最优值", "已运行代码"],
+  "acceptance": {"required_fields": ["problem_type", "decision_variables", "constraints", "baseline_model", "blocked_items"]}
+}

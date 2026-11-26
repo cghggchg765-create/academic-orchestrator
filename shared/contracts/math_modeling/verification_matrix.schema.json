@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "math-modeling/verification-matrix.schema.json",
+  "title": "Mathematical Modeling Verification Matrix",
+  "type": "object",
+  "required": ["schema_version", "project_id", "checks"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "project_id": {"type": "string"},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check_id", "category", "status"],
+        "properties": {
+          "check_id": {"type": "string"},
+          "category": {"enum": ["mathematical", "code", "numeric", "figure", "citation", "typesetting", "domain", "competition"]},
+          "status": {"enum": ["PENDING", "PASS", "FAIL", "BLOCKED", "WAIVED"]},
+          "scope": {"type": "array", "items": {"type": "string"}},
+          "evidence": {"type": "array", "items": {"type": "object"}},
+          "reviewer": {"type": "string"},
+          "failure_reason": {"type": "string"},
+          "repair_action": {"type": "string"},
+          "affected_artifacts": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

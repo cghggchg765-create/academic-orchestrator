@@ -1,0 +1,6 @@
+# 插件独占模式（PLUGIN-ONLY）
+# ZCode 加载机制：插件组件以 `math-modeling-agent-system:组件名` 前缀注册；流程中的
+# skill()/subagent_type/registry 引用已全部使用插件前缀名。
+# 本模式下，用户级目录（~/.zcode/{skills,agents}）不得再存在本仓库组件副本——
+# lint 的 check_user_level_sync 将按此标志改为"禁止用户级存在本仓库组件"检查，
+# 确保实际执行调用的就是插件注册的 Agent / Skill / MCP，杜绝旧副本遮蔽断层。

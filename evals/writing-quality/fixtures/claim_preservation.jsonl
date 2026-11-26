@@ -1,0 +1,2 @@
+{"id":"claim-001","text":"2020—2024年间，模型在3个数据集上的平均误差为4.2%，95% CI为[3.8%,4.6%]。","claims":["time_range=2020—2024","datasets=3","mean_error=4.2%","ci=[3.8%,4.6%]"],"source_span":"L1"}
+{"id":"claim-002","text":"2020—2024年间，模型在3个数据集上的平均误差为4.2%，95% CI为[3.8%,4.6%]。","candidate":"2020—2024年间，模型在3个数据集上的平均误差为4.5%，95% CI为[3.8%,4.6%]。","claims":["time_range=2020—2024","datasets=3","mean_error=4.2%","ci=[3.8%,4.6%]"],"expected_verdict":"FAIL","provenance":"claim_negative_regression_seed_v1"}

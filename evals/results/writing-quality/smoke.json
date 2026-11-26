@@ -1,0 +1,57 @@
+{
+  "schema_version": "2.0",
+  "mode": "plugin_only",
+  "status": "PASS",
+  "results": [
+    {
+      "id": "protected-001",
+      "mode": "identity_compatibility",
+      "language": "unknown",
+      "domain": "academic",
+      "status": "PASS",
+      "decision": "PASS",
+      "checks": {
+        "protected_detected": true,
+        "protected_fidelity": true,
+        "changed": false,
+        "claim_fidelity": true,
+        "citation_fidelity": true,
+        "numeric_fidelity": true,
+        "term_fidelity": true,
+        "equation_fidelity": true
+      },
+      "failure_reasons": [],
+      "blocked_items": [],
+      "original_sha256": "a939cbbf06c437c94bd380d301d5c9162f0ccb3137e49910415c628188682cf4",
+      "candidate_sha256": "a939cbbf06c437c94bd380d301d5c9162f0ccb3137e49910415c628188682cf4",
+      "original_length": 53,
+      "candidate_length": 53,
+      "review_required": false
+    },
+    {
+      "id": "protected-002",
+      "mode": "identity_compatibility",
+      "language": "unknown",
+      "domain": "academic",
+      "status": "PASS",
+      "decision": "PASS",
+      "checks": {
+        "protected_detected": true,
+        "protected_fidelity": true,
+        "changed": false,
+        "claim_fidelity": true,
+        "citation_fidelity": true,
+        "numeric_fidelity": true,
+        "term_fidelity": true,
+        "equation_fidelity": true
+      },
+      "failure_reasons": [],
+      "blocked_items": [],
+      "original_sha256": "7c4c2593598df91b90863f572d62b355b92f6b7bd80a4f52df99f316954992f2",
+      "candidate_sha256": "7c4c2593598df91b90863f572d62b355b92f6b7bd80a4f52df99f316954992f2",
+      "original_length": 32,
+      "candidate_length": 32,
+      "review_required": false
+    }
+  ]
+}
