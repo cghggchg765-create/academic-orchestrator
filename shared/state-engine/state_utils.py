@@ -121,6 +121,8 @@ def main():
     p.add_argument("node"); p.add_argument("--agent", help="执行该节点的 Agent（N0 可省，其余必填且须匹配 registry executor）")
     p.add_argument("--skills", help="执行时已加载的技能，逗号分隔（非 N0 必填且须含本节点 required_skills）")
     p.add_argument("--artifact", action="append"); p.add_argument("--dir", default=".")
+    p.add_argument("--allow-empty-artifacts", action="store_true",
+                   help="允许产物目录为空时仍标完成（仅异常情况，须说明原因并留痕）")
     p.set_defaults(func=cmd_node_finish)
 
     p = sub.add_parser("node-review", help="登记节点审阅记录（审阅 Agent 调用；FAIL/BLOCKED 必须附 evidence）")

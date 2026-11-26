@@ -176,6 +176,19 @@ def cmd_node_finish(args):
     state["nodes"][node]["executed_by"] = executor
     if node != "N0":
         state["nodes"][node]["skills_used"] = [s.strip() for s in (args.skills or "").split(",") if s.strip()]
+    # 2.0.0 产物存在性校验：不允许空产物标完成。
+    # 判定标准：节点声明的 artifact 路径下必须至少有一个非占位文件
+    # （忽略 .gitkeep / readme.txt / 空目录），否则拒绝 node-finish。
+    if node != "N0" and not getattr(args, "allow_empty_artifacts", False):
+        prod = _count_node_outputs(root, node)
+        if prod == 0:
+            sys.exit(
+                f"[state_utils] 拒绝：节点 {node}（{NODES[node]['name']}）声明的产物目录 "
+                f"{NODES[node]['artifact']} 下没有任何实际产出文件。\n"
+                f"  禁止「空产物标完成」——请先产出本节点应有的交付物"
+                f"（如 N2 的 Data/DataLog.md 与实际数据文件、N4 的 Code/、N7 的 ReportPaper/）。\n"
+                f"  若该节点确实无需产出（异常情况），请加 --allow-empty-artifacts 并说明原因。"
+            )
     # 产物快照登记：级联失效（cascade-invalidate）据此检测上游变更 → 下游联动重置
     state["nodes"][node]["artifact_hash"] = artifact_snapshot(root, node)
     for art in args.artifact or []:
@@ -190,6 +203,67 @@ def cmd_node_finish(args):
     update_homepage_meta(node_homepage(root, node), state["nodes"][node]["status"])
     refresh_dashboard(root)
     print(f"[state_utils] node {node} -> {state['nodes'][node]['status']}（执行 Agent: {executor}）")
+
+
+PLACEHOLDER_NAMES = {".gitkeep", "readme.txt", ".gitignore"}
+# 脚手架预建的模板文件：存在不代表"有产出"。用哨兵字符串判定是否仍是未填写的空模板
+# （比字数阈值可靠：模板本身带说明表格，字数不少但全是占位内容）。
+SCAFFOLD_TEMPLATES = {
+    "data/datalog.md": ("产物占位", "待 N2 数据处理后填写"),
+    "resultfigures/figure-list.md": ("待填写", "占位"),
+    "modeldocs/model-framework.md": ("待填写", "占位"),
+    "modeldocs/formula.md": ("待填写", "占位"),
+    "modeldocs/assumption.md": ("待填写", "占位"),
+    "modeldocs/reference-list.md": ("待填写", "占位"),
+    "modeldocs/sensitivity-analysis.md": ("待填写", "占位"),
+    "modeldocs/error-analysis.md": ("待填写", "占位"),
+    "modeldocs/model-validation.md": ("待填写", "占位"),
+    "submissionpackage/参赛提交清单.md": ("待填写", "占位"),
+    "logrecord/daily-log.md": ("待填写", "占位"),
+    "logrecord/bug-fix-log.md": ("待填写", "占位"),
+    "logrecord/version-update.md": ("待填写", "占位"),
+}
+
+
+def _is_filled(path, rel):
+    """判断文件是否为真实产出（非占位文件、非未填写的空模板）。"""
+    base = os.path.basename(path).lower()
+    if base in PLACEHOLDER_NAMES:
+        return False
+    norm = rel.replace("\\", "/").lower()
+    markers = SCAFFOLD_TEMPLATES.get(norm)
+    if markers:
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                body = fh.read()
+        except OSError:
+            return False
+        # 只要还带着"占位/待填写"哨兵，就视为未产出
+        if any(m in body for m in markers):
+            return False
+    return True
+
+
+def _count_node_outputs(root, node):
+    """统计节点声明产物目录下的真实产出数（排除占位文件与未填写的空模板）。"""
+    paths = [p.strip() for p in NODES[node].get("artifact", "").split(",") if p.strip()]
+    total = 0
+    for rel_root in paths:
+        full_root = os.path.join(root, rel_root)
+        if os.path.isfile(full_root):
+            if _is_filled(full_root, rel_root):
+                total += 1
+        elif os.path.isdir(full_root):
+            for dp, dns, fns in os.walk(full_root):
+                if ".git" in dp.split(os.sep):
+                    dns[:] = []
+                    continue
+                for f in fns:
+                    full = os.path.join(dp, f)
+                    rel = os.path.relpath(full, root)
+                    if _is_filled(full, rel):
+                        total += 1
+    return total
 
 
 def cmd_node_log(args):

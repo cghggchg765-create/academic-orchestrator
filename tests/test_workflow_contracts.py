@@ -77,7 +77,12 @@ class WorkflowContractsTest(unittest.TestCase):
         env = dict(os.environ)
         # 固定 skill 扫描根：路由结果可复现，不随本机已装 skill 漂移
         env["MM_SKILL_ROOTS"] = str(self.skill_root)
-        return subprocess.run(["python", str(STATE), *args], text=True, capture_output=True,
+        argv = list(args)
+        # 本文件用例验证状态机流转，不验证产物产出；空产物校验由 test_workflow_gates 的
+        # 专门用例覆盖。故对 node-finish 统一补豁免，避免用例被迫造假产物。
+        if argv and argv[0] == "node-finish" and "--allow-empty-artifacts" not in argv:
+            argv.append("--allow-empty-artifacts")
+        return subprocess.run(["python", str(STATE), *argv], text=True, capture_output=True,
                               check=check, env=env)
 
     def complete_n0(self):

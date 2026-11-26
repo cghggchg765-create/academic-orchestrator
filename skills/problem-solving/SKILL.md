@@ -3,8 +3,9 @@ name: problem-solving
 description: |
   问题解决流程与联网搜索规范。先搜索再回答，获取最新信息。
   触发词：搜索、查找、问题、不确定、报错、技术问题、事实性问题
-version: 2.0
-updated: 2026-06-01
+metadata:
+  version: "2.0"
+  updated: 2026-06-01
 ---
 
 # 问题解决流程与联网搜索规范

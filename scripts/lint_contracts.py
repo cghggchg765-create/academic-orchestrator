@@ -596,11 +596,53 @@ def check_no_deleted_skill_loads() -> None:
                           f"（应改为运行时按需路由或指向外部插件）")
 
 
+SKILL_FRONTMATTER_KEYS = {"name", "description", "when_to_use", "license", "metadata"}
+AGENT_FRONTMATTER_KEYS = {
+    "name", "description", "tools", "disallowedTools", "skills", "mcpServers",
+    "model", "thoughtLevel", "permissionMode", "maxTurns", "background",
+    "injectAgentsMd", "memory", "color",
+}
+
+
+def check_frontmatter_whitelist() -> None:
+    """frontmatter 白名单硬校验（2.0.0）。
+
+    ZCode 宿主规则：
+      - skill 含白名单外的顶层键 → 仍然加载，但 safeToAutoLoad=false（不会被自动加载）
+      - agent 含任何非 strict 键 → 整个 agent 解析失败、不注册
+    两者都是静默失败，必须由 lint 拦住。
+    """
+    for d in sorted((ROOT / "skills").iterdir()):
+        if not d.is_dir():
+            continue
+        p = d / "SKILL.md"
+        if not p.exists():
+            continue
+        data = _load_frontmatter(p)
+        if data is None:
+            continue
+        extra = sorted(set(data) - SKILL_FRONTMATTER_KEYS)
+        if extra:
+            error(f"skill {d.name} 含非白名单 frontmatter 键 {extra}"
+                  f"（会被判 safeToAutoLoad=false，不被自动加载）")
+        desc = data.get("description")
+        if isinstance(desc, str) and len(desc) > 1024:
+            error(f"skill {d.name} 的 description 超 1024 字符（{len(desc)}）→ 整个 skill 被丢弃")
+    for p in sorted((ROOT / "agents").glob("*.md")):
+        data = _load_frontmatter(p)
+        if data is None:
+            continue
+        extra = sorted(set(data) - AGENT_FRONTMATTER_KEYS)
+        if extra:
+            error(f"agent {p.stem} 含非官方 frontmatter 键 {extra}（strict schema，整个 agent 不会注册）")
+
+
 def main() -> int:
     scan_markdown()
     check_registry()
     check_registry_vs_nodes()
     check_frontmatter()
+    check_frontmatter_whitelist()
     check_version_alignment()
     check_component_counts()
     check_no_big_archives_tracked()

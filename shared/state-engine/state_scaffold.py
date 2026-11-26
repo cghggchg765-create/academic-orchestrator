@@ -842,6 +842,18 @@ def cmd_stage_set(args):
 def cmd_gate_set(args):
     root = os.path.abspath(args.dir)
     state = load_state(root)
+    # 2.0.0 防伪造：review 类门禁（由独立审阅 Agent 判定）禁止用 gate-set 直写 PASS。
+    # 否则可绕过 node-review 的 required_skills / 血缘 / MCP 留痕校验，直接伪造"通过"。
+    REVIEW_KIND_GATES = {"M1", "D1", "P1", "P2", "T1", "V1", "B1", "W2", "A3"}
+    if args.gate in REVIEW_KIND_GATES and str(args.status).upper() == "PASS":
+        sys.exit(
+            f"[state_utils] 拒绝：{args.gate} 是审阅类门禁，不能用 gate-set 直接置 PASS。\n"
+            f"  正确做法：由配对审阅 Agent 执行\n"
+            f"    python state/state_utils.py node-review <Nx> --agent <审阅Agent> "
+            f"--result PASS --skills \"<必读skill>\" --summary \"...\" --evidence \"<证据路径>\"\n"
+            f"  该命令会自动校验必读 Skill、数据血缘（N2）、MCP 检索留痕（核心节点）后才落门禁。\n"
+            f"  若确属离线/人工特批，请用 node-review 的 --allow-missing-* 豁免并在交付说明中留痕。"
+        )
     gate = state["gates"].setdefault(args.gate, {"status": "pending"})
     gate["status"] = args.status
     if args.agent:

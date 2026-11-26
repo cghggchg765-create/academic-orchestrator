@@ -1,7 +1,9 @@
 ---
 name: humanizer
 description: "Detect and remove AI writing patterns to produce natural, human-sounding prose. 36 pattern types, AI-ness scoring. Works on any prose: academic papers, essays, reports, blog posts, documentation. Triggers: humanize, de-AI, remove AI voice, natural writing, AI detection, 去AI化, 去AI味, 降低AI率, 太像AI写的, 机械感, 润色使表达自然, AI痕迹, 论文降AI, 文章像机器写的. Pairs with academic-humanize for academic text."
-category: creative
+metadata:
+  category: creative
+  version: "2.1.0"
 ---
 
 # AI Writing Pattern Detection and Removal
