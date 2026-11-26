@@ -119,6 +119,17 @@ def cmd_round_score(args):
     node = args.node
     scope_id = _round_scope_id(args)
     require_independent_reviewer(node, args.judge)
+    # P1-6：轮次评分只允许节点主审阅者（REVIEW_GATE 对应的那个），
+    # 不允许 secondary reviewer（如图表对标者）给论文/代码轮次打分——
+    # 否则可跳过 mm-latex-writing / mm-self-review 的评审口径。
+    main_reviewer = NODES[node].get("reviewer")
+    if main_reviewer and args.judge != main_reviewer:
+        sys.exit(
+            f"[state_utils] 拒绝：{node} 的轮次评分 judge 必须是主审阅者 {main_reviewer}，"
+            f"实际为 {args.judge}。\n"
+            f"  secondary reviewer（如 mm-figure-table-benchmarker）只通过 node-review "
+            f"登记其专项门禁（B1），不参与轮次五维评分。"
+        )
     require_review_skills(node, args.skills_read)
 
     try:

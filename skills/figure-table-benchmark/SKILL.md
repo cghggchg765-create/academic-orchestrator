@@ -1,6 +1,6 @@
 ---
 name: figure-table-benchmark
-description: "图表与表格的文献对标规范：写作前先查同领域论文实际用了哪些图、怎么画、表格有哪些列名与数据，产出对标矩阵并逐项判定我方图表的准确性/全面性/学术性，缺口回传修复。触发词：图表对标, 表格设计, 列名设计, 图表完备性, 表格字段, 同行图表对比, table design, figure benchmark, table completeness."
+description: "图表与表格的文献对标规范：写作前先查同领域论文实际用了哪些图、怎么画、表格有哪些列名与数据，产出对标矩阵并逐项判定我方图表的准确性/全面性/学术性，缺口回传修复；同时给出学术表格构建规范（三线表/booktabs、表注、列名与单位、多级表头）。触发词：图表对标, 表格设计, 表格制作, 三线表, booktabs, 表注, 列名设计, 图表完备性, 表格字段, 同行图表对比, table design, table formatting, figure benchmark, table completeness."
 when_to_use: "在论文/报告的图与表定稿前、或图表审阅（N6/N7/N8）需要判定'我们是否漏了同行都会给的信息'时加载。配合 mm-viz-reviewer 使用，本 skill 定义对标方法与判定口径，不替代其规范核对。"
 license: MIT
 metadata:
@@ -118,7 +118,39 @@ ReportPaper/LaTeX/sections/*.tex   \begin{table} / \includegraphics 的实际用
 
 **互不替代**：格式全合规但缺关键列的表格，V1 可能 PASS，但对标必须报 `GAP_MAJOR`。
 
-## 五、参考文件
+## 五、学术表格构建规范（table.build）
+
+对标判定"该有哪些列"之后，落地时的构建规范如下。格式细则以 `skills/latex-guard/SKILL.md`
+与 `shared/contracts/latex_quality_rules.md` 为准，本节只列表格特有的硬要求。
+
+### 5.1 结构
+
+| 要求 | 说明 |
+|---|---|
+| 三线表 | 只用 `\toprule` / `\midrule` / `\bottomrule`（`booktabs`），禁竖线与全框线 |
+| 表题在上 | `\caption` 必须放在 `tabular` **之前**；表注在 `tabular` **之后** |
+| 表注格式 | 以 `注：` 开头，`\footnotesize`，左对齐；写单位、缩写、显著性标记、口径说明 |
+| 浮动位置 | `[hbt!]`；大表用 `longtable`/`tabularx` 拆分，避免 `Float too large for page` |
+| 字号 | 表格内可与正文不同，但**全文表格字号一致**；表注不得与正文同字号 |
+
+### 5.2 列设计（与对标直接相关）
+
+| 要求 | 说明 |
+|---|---|
+| 列名学术化 | 禁内部代号（`p1_out`、`tmpA`）；用领域惯例名（`RMSE`、`AIC`、`n`） |
+| 单位在表头 | 单位写在列名括号内（`温度 (°C)`），不在单元格里重复 |
+| 量级一致 | 同列数量级差异大时用统一科学计数并在表注说明，不混用 `1.2e3` 与 `1200` |
+| 小数位一致 | 同列保留位数一致；精度不超过测量精度 |
+| 对齐 | 数值列右对齐或按小数点对齐；文本列左对齐；不要整表居中数值 |
+| 空值处理 | 缺失用 `—` 并在表注说明其含义，不留空白（空白含义不明） |
+
+### 5.3 与对标矩阵的衔接
+
+对标矩阵的 `our_spec.columns` 应是**最终 LaTeX 表头**（不是草稿名），
+`dimensions.data_columns` 的 evidence 指向该表的 `\label{tab:*}`。
+这样"同行有哪些列"与"我实际写了哪些列"逐项可对。
+
+## 六、参考文件
 
 - `references/figure-table-trace-contract.md` — 图表-主张追溯契约（C3 四项检查口径）
 - `references/benchmark-matrix.schema.json` — 对标矩阵的机器可读 schema

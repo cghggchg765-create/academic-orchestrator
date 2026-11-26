@@ -17,7 +17,7 @@ flowchart TB
 
     subgraph L1["② 编排层"]
         SK["mathematical-modeling 主控 Skill<br/>9 阶段定义 · 产物落点 · 门控 · 路由"]
-        O["orchestrator 主编排<br/>Phase 0-8 委托 · checkpoint 门控<br/>🔒 state 唯一写者"]
+        O["主 Agent 编排<br/>Phase 0-8 委托 · checkpoint 门控<br/>🔒 state 唯一写者"]
     end
 
     subgraph L2["③ 外部状态统一节点 state"]
@@ -84,9 +84,9 @@ flowchart TB
 
 ## 框架逻辑说明
 
-1. **触发**：用户说出意图（"帮我做国赛数学建模" / "代码迭代" / "论文修改" / "只画图"），或由 goal/loop 插件驱动；orchestrator 依据 `mathematical-modeling` 主控 Skill 与 `mm-iteration-engine` 迭代引擎 Skill 编排。
+1. **触发**：用户说出意图（"帮我做国赛数学建模" / "代码迭代" / "论文修改" / "只画图"），或由 goal/loop 插件驱动；**主 Agent** 依据 `academic-orchestration` 编排协议、`mathematical-modeling` 主控 Skill 与 `mm-iteration-engine` 状态引擎编排。
 2. **初始化（Phase 0，前期工作）**：`state_utils.py init` 一键搭建 MathModel_Contest 标准结构并**全量预建 state**（全局状态 + 总工作栏 + 9 个节点单独首页 + 注册表 + 案例库，全部 pending），本地 `git init` 首次提交，并提醒用户创建 GitHub 远端仓库（推送由用户执行）。
-3. **状态统一节点**：`state/decision_log.json`（schema 2.0，参考项目 schema 1.0 的严格超集）是唯一事实源。**单写者协议**——orchestrator 唯一写全局文件，子 Agent 只写自己的 `claim.json`（租约）与 `result.json`（写回）；写入原子替换 + seq 乐观锁；每次状态变更单独 git commit，中断后可断点恢复。
+3. **状态统一节点**：`state/decision_log.json`（schema 2.0，参考项目 schema 1.0 的严格超集）是唯一事实源。**单写者协议**——主 Agent 唯一写全局文件，子 Agent 只写自己的 `claim.json`（租约）与 `result.json`（写回）；写入原子替换 + seq 乐观锁；每次状态变更单独 git commit，中断后可断点恢复。
 4. **节点执行与自治联动**：每个节点可**单独调用**——节点 Agent 读状态与注册表 → 前置缺失则委派上游或输出 `[PREREQ-REQUEST]` → 执行 → 自检 → 请求配对审阅 `[REVIEW-REQUEST]` → FAIL 修复（≤2 次）→ 刷新本节点首页并交付；只跑中间节点时只刷新对应首页，其余保持 pending。
 5. **审阅独立于执行**：每个节点有固定配对审阅 Agent（见覆盖环节表），审阅 Agent ≠ 执行 Agent，审阅前必须加载配对 Skill 并在记录中声明；委派必须与 `registry.json` 注册表匹配。
 6. **迭代循环（代码 N4/N5、论文 N7/N8）**：`SEARCH 搜优秀案例沉淀 cases → IMPLEMENT roundN 分支 → RUN 运行取证 → COMMIT 三次提交（implement/run/score，带 Round/Agent/Stage/Gate/Goal/Score trailer）→ SCORE 多维评分（硬上限+仲裁）→ DECIDE`。评分 ≥ pass 才 merge 回 main；不达标携带 feedback 进入下一轮；达轮数上限或平台期保留历史最优并升级人工。
@@ -97,7 +97,7 @@ flowchart TB
 
 | 阶段 | 环节 | Agent | Skill | 配对审阅 Agent |
 |:----:|------|-------|-------|---------------|
-| 0 | 项目初始化（标准结构+state 预建+git） | orchestrator | mathematical-modeling + mm-iteration-engine | — |
+| 0 | 项目初始化（标准结构+state 预建+git） | 主 Agent（main-agent） | mathematical-modeling + mm-iteration-engine | — |
 | 1 | 选题与赛题拆解 | selector | mm-problem-analysis | reviewer（节点审阅，门禁 M1 + 人工 H1） |
 | 2 | 数据预处理 | dataprep | mm-data-preprocessing | reviewer（节点审阅，门禁 D1） |
 | 3 | 模型搭建 | modeler | mm-model-library | reviewer（节点审阅，门禁 P1） |
@@ -110,7 +110,7 @@ flowchart TB
 ## 目录结构
 
 ```
-agents/          Agent 定义文件（9 核心 + 2 专用审阅 + 支撑副本 + ars_* 学术研究 3 个）
+agents/          Agent 定义文件（21 个：8 节点执行 + 4 专用审阅（含图表对标）+ 学术支撑）
 skills/          Skill 包（mm-iteration-engine 迭代引擎 + mathematical-modeling 主控 + 10 个 mm-* + 通用学术支撑技能；学术四技能由 academic-research-skills 插件提供）
   mm-iteration-engine/   迭代引擎：状态节点 schema 2.0、节点首页、审阅配对、迭代循环、git 规范
     scripts/state_utils.py   状态节点命令行助手（init/node-review/round-score/round-decide/result-validate/result-ingest 等）
@@ -123,7 +123,7 @@ tests/           契约与回归测试（python -m unittest discover -s tests -p
 .github/         CI 工作流（contracts.yml：编译 + 契约 + 测试矩阵）
 pyproject.toml   项目元数据与版本单一来源
 templates/       国赛论文 Word/PDF 模板
-docs/            文档导航（docs/README.md + docs/academic-research/ ARS 文档 + docs/design|migration）→ 迭代工作流说明 + 冒烟验证报告
+docs/            文档导航（docs/README.md）→ 迭代工作流说明 + 冒烟验证报告；历史文档见 docs/archive/
 能力盘点.md       本地组件全量清单与差距分析
 ```
 
@@ -153,13 +153,33 @@ docs/            文档导航（docs/README.md + docs/academic-research/ ARS 文
 - 数据流地图见 [docs/DATA_FLOWS.md](docs/DATA_FLOWS.md)；风险登记见 [docs/RISK_REGISTER.md](docs/RISK_REGISTER.md)；控制可用性见 [docs/CONTROL_AVAILABILITY.md](docs/CONTROL_AVAILABILITY.md)。
 - 已示例化实现并测量：`deterministic citation-existence verification gate`（四索引引用存在性核查）、`a deterministic numeric/citation token-conservation checker`（修订声明漂移防护）、Socratic 问题表述告警的 `held-out miss rate 0.34–0.38 → 0.094 with false-fire 0/16 preserved`。承载矩阵及证据见 `docs/STAGE_CAPABILITY_MATRIX.md`。
 
-## ARS 学术研究融合（v3.21.0 全量并入）
+## 与学术界主体能力的分工（2.0.0 口径）
 
-Academic Research Skills（ARS，Claude Code 生态学术科研全套）已平铺融合进本仓库：四技能树 `skills/{academic-paper,academic-paper-reviewer,academic-pipeline,deep-research}`（运行时名称仍使用插件 namespace）、`shared/`（契约/任务原则）、`scripts/`（crossref/openalex/semantic_scholar/arxiv/中文文献客户端）、`agents/`（research_architect_agent / synthesis_agent / report_compiler_agent）、`commands/ars-*`（16 个）、`docs/`（design/migration 等）。先前缀 `ars_*` 的 3 个学术 Agent 与 `/ars-*` 命令现随本仓直接可用；数学建模编排（orchestrator）可跨学术工作流（deep-research 深度研究 / academic-paper 论文写作 / academic-pipeline）联动调用。
+**本插件不再持有 ARS（academic-research-skills）的任何副本。** 1.x 时期平铺进来的四技能树
+（`academic-paper` / `academic-paper-reviewer` / `academic-pipeline` / `deep-research`）、
+3 个学术 agent（`research_architect_agent` / `synthesis_agent` / `report_compiler_agent`）、
+16 个 `/ars-*` 命令，已在 2.0.0 **全部移除**——它们由独立的 `academic-research-skills`
+插件提供，重复分发只会造成版本漂移与双份遮蔽。
 
-> 🔴 **当前 v1.8.0：融合 math-modeling-skill-pro Pro 知识库**（作者授权）：139 张 CUMCM 优秀论文案例卡（2012—2025）全量迁入 `skills/mathematical-modeling/assets/case-library/`，12 份选型/验证/创新/写作决策规则按流程模块映射至 `mm-problem-analysis / mm-model-library / mm-data-preprocessing / mm-model-tuning / mm-latex-writing / mm-algorithm-dev` 的 `assets/pro/`，8 类代码骨架迁入 mm-algorithm-dev；新增 `state_utils.py case-search` 结构化案例检索（中文二字片段 + 别名扩展 + TF-IDF 加权，`--json/--year/--type/--model/--skill-root/--save`），N1 选题拆解强制案例类比检索闭环；证据边界遵守 corpus-provenance（案例卡为决策记忆转述，OCR 抽样未核验内容不视为已核验，模型频次仅作检索线索）。
+| 能力 | 由谁提供 |
+|---|---|
+| 论文写作 / 深度研究 / 同行评审 / 全链路编排 | 外部插件 `academic-research-skills:academic-paper` 等 |
+| 编排骨架（状态机、门禁、迭代环、派发协议） | **本插件** `academic-orchestration` |
+| 数据血缘与可复现（raw 锁定、血缘台账、环境锁） | **本插件** `data-lineage` 契约 + 校验器 |
+| 图表/表格文献对标 | **本插件** `figure-table-benchmark` + `mm-figure-table-benchmarker`（B1 门禁） |
+| 去 AI 化 / LaTeX 质检 / 图表规范 / 建模专项 | **本插件** `humanizer` / `academic-humanize` / `latex-guard` / `mm-*` |
+| 其余专业能力（xlsx / pptx / docx / drawio / pdf…） | `mm-skill-router` 运行时扫描本机已装 skill；未装则记为 `unresolved` |
+
+> 🔴 **Pro 知识库（v1.7.0 融合，仍有效）**：139 张 CUMCM 优秀论文案例卡（2012—2025）在
+> `skills/mathematical-modeling/assets/case-library/`；12 份选型/验证/创新/写作决策规则
+> 映射至对应 `mm-*` skill 的 `assets/pro/`；N1 选题拆解强制案例类比检索
+> （`state_utils.py case-search`）。证据边界见 `corpus-provenance.md`
+> （案例卡为决策记忆转述，OCR 抽样未核验内容不视为已核验，模型频次仅作检索线索）。
 >
-> 🔴 **全面优化整改（v1.5.0，历史）· v1.6.0（历史）：新增 mm-pdf-vision 视觉逐页阅读与 PDF 格式核查**：9 阶段闭环已装配 Deep Research 迭代融合（每轮 SEARCH 根因分析/方案论证、SCORE 先进性核查、DECIDE 失败原因分析，迭代每轮强制重新检索、禁止纯内生输出）、MCP Checkpoint 0 门禁 + N1/N3/N4/N5/N6/N7 核心节点必调 + 知识卡片派发（`search-evidence`）+ **Deep Research 链每轮介入留痕（`dr-note`/`dr-list`）**、`/ars-*` 专项命令嵌入 `/mm` 路由。统一机制规格见 **`docs/archive/v1.x-optimization/agent-collaboration-loop.md`**（9 阶段协作闭环表 / Deep Research 嵌入点清单 / 迭代环融合方案）；**MCP 检索卡片体系见 `docs/optimization/mcp-检索卡片体系.md`**（Checkpoint 0 / 五节点必调 / 卡片沉淀 / 场景分发 / N8 终检）；**Skill 组合与命令路由见 `docs/optimization/skill组合加载与命令路由.md`**；**全组件盘点见 `docs/archive/v1.x-optimization/组件盘点与合并规划.md`**；**BUG 排查见 `docs/optimization/专项5-BUG排查修复表.md`**；另配 `重叠合并清单` / `deep-research-迭代融合报告` / `8类BUG修复报告` / `全组件联动地图`（含专项 6 验收清单核对表）。组件口径为 **21 Agent / 23 Skill / 7 命令**（2.0.0 实测；lint `EXPECTED_COUNTS` 为准）（`scripts/lint_contracts.py` 零报错 + `tests/` 全量单测通过；academic-humanizer 备用子集已并入 academic-humanize）。
+> 📌 **历史文档**：v1.5.0/v1.7.0 的优化整改记录已归档到
+> `docs/archive/v1.x-optimization/`（含当时的 24/34/22 口径与取舍理由），
+> **不作为现行规范**。现行组件口径以 `scripts/lint_contracts.py` 的
+> `EXPECTED_COUNTS` 为准（当前 **21 Agent / 23 Skill / 7 命令**）。
 
 ## 标准项目结构（MathModel_Contest 适配版）
 

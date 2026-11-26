@@ -185,16 +185,26 @@ def cmd_checkpoint_list(args):
     if args.latest:
         records = records[-1:]
     last = records[-1] if records else {}
+    # P1-9：空壳快照（无 done/pending/artifact）允许落盘（保持"快速记一笔"的用法），
+    # 但必须明确告警——它不是可续跑的归档，续跑时需要人工回溯。
+    empty_shell = bool(last) and not (last.get("done") or last.get("pending")
+                                      or last.get("artifacts"))
+    if last:
+        hint = (f"从 {last.get('phase')} 之后续跑；已完成 {len(last.get('done') or [])} 项，"
+                f"待完成 {len(last.get('pending') or [])} 项")
+        if empty_shell:
+            hint = (f"⚠ 最近一次快照（{last.get('phase')}）是空壳：无已完成/待完成项、无产物记录，"
+                    f"不构成可续跑的归档。续跑前请人工确认实际进度，或重发一条含 "
+                    f"--done/--pending/--artifact 的快照。")
+    else:
+        hint = "无快照，从头开始"
     out = {
         "node": args.node,
         "count": len(records),
         "corrupt_lines": corrupt,
+        "resumable": (not empty_shell) if last else False,
         "checkpoints": records,
-        "resume_hint": (
-            f"从 {last.get('phase')} 之后续跑；已完成 {len(last.get('done') or [])} 项，"
-            f"待完成 {len(last.get('pending') or [])} 项"
-            if last else "无快照，从头开始"
-        ),
+        "resume_hint": hint,
     }
     print(json.dumps(out, ensure_ascii=False, indent=2))
 

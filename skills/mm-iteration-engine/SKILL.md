@@ -235,7 +235,7 @@ python state/state_utils.py review-loop <Nx> --dir .
 | N3 建模 | reviewer | 公式完整/假设有依据/模型对比≥2 | 引用 ModelDocs 产物 |
 | N4 代码 | **mm-code-reviewer** | 五维评分 + 硬上限 + 仲裁 | Code/output 运行证据 |
 | N5 调优 | **mm-code-reviewer** | 基线/超参≥3组/敏感性/鲁棒性≥2 | 调优报告 + 运行日志 |
-| N6 图表 | **mm-viz-reviewer** | 12 项图表规范 + 图库去冗余 | 图文件 + figure-list |
+| N6 图表 | **mm-viz-reviewer** | 5 项前置门禁 + 20 项质量核对 + 图库去冗余 | 图文件 + figure-list |
 | N7 论文 | reviewer | 五维评分 + 主张↔证据映射 | LaTeX + 运行证据 |
 | N8 评审 | reviewer（终审） | 全维度反模式终扫 + 提交清单 | 全文核对 |
 
