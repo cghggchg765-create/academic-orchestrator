@@ -67,6 +67,7 @@ from state_search import *  # noqa: F401,F403,E402
 from state_scopes import *  # noqa: F401,F403,E402
 from state_skills import *  # noqa: F401,F403,E402
 from state_progress import *  # noqa: F401,F403,E402
+from state_events import *  # noqa: F401,F403,E402
 
 def main():
     parser = argparse.ArgumentParser(description="状态统一节点命令行助手（schema 2.0）")

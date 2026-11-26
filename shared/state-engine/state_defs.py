@@ -604,6 +604,15 @@ def mcp_search_evidence(root, node, round_no=None):
 DATA_LINEAGE_FILE = os.path.join("Data", "data-lineage.json")
 
 
+def _log_exemption(root, kind, node, agent="-", detail=""):
+    """豁免留痕（P2-10b）：--allow-* 不再只是提前 return，而是写一条可审计记录。"""
+    try:
+        from state_events import record_exemption
+        record_exemption(root, kind, node, agent, detail)
+    except Exception:
+        pass  # 留痕失败不阻断主流程
+
+
 def require_data_lineage(root, node, allow_flag=False):
     """N2 数据血缘强制校验（D1 门禁机器执行者）。
 
@@ -617,6 +626,7 @@ def require_data_lineage(root, node, allow_flag=False):
     if node != "N2":
         return
     if allow_flag:
+        _log_exemption(root, "allow-missing-lineage", node)
         return
     ledger = os.path.join(root, DATA_LINEAGE_FILE)
     if not os.path.isfile(ledger):
@@ -675,6 +685,7 @@ def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
     if node not in MCP_MANDATORY_NODES:
         return
     if allow_flag:
+        _log_exemption(root, "allow-missing-mcp", node, detail=f"round={round_no}")
         return
     evidence = mcp_search_evidence(root, node, round_no)
     if evidence:

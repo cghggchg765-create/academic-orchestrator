@@ -897,12 +897,20 @@ def cmd_gate_set(args):
                 f"（如 round-score），不允许外部置 PASS。"
             )
     gate = state["gates"].setdefault(args.gate, {"status": "pending"})
+    prev_status = gate.get("status", "pending")
     gate["status"] = args.status
     if args.agent:
         gate["agent"] = args.agent
     if args.result:
         gate["result"] = args.result
     gate["timestamp"] = now_iso()
+    try:
+        from state_events import record_gate_change
+        record_gate_change(root, args.gate, prev_status, args.status,
+                           args.agent or "-", source_cmd="gate-set",
+                           note=(args.result or "")[:120])
+    except Exception as exc:
+        print(f"[state_utils] ⚠ 门禁事件记录失败: {exc}", file=sys.stderr)
     save_state(root, state)
     print(f"[state_utils] gate {args.gate} -> {args.status}")
 

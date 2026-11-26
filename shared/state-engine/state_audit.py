@@ -760,6 +760,26 @@ def check_review_timeline(root):
     return []
 
 
+def _gate_events_for_audit(root):
+    """校验门禁事件流哈希链（审计门禁是否被静默改写）。"""
+    try:
+        from state_events import verify_chain
+        return verify_chain(root)
+    except (ImportError, Exception):
+        return {"intact": True, "count": 0, "broken_at": None}
+
+
+def _exemptions_for_audit(root):
+    """汇总门禁豁免次数（--allow-* 的实际发生情况）。"""
+    try:
+        from state_events import summarize_exemptions
+        s = summarize_exemptions(root)
+        s.pop("events", None)  # 审计输出保持精简
+        return s
+    except (ImportError, Exception):
+        return {"total": 0, "by_kind": {}, "by_node": {}}
+
+
 def _scan_orphans_for_audit(root):
     """project-audit 用的轻量孤儿扫描（复用 orphan-scan 的判定，不落盘）。"""
     try:
@@ -806,6 +826,9 @@ def cmd_project_audit(args):
     # 2.0.0：孤儿文件扫描入审计（此前 orphan-scan 是独立命令、无人调用）。
     # 找出既不在任何节点产物目录、也未登记入库的散落文件。
     report["orphan_files"] = _scan_orphans_for_audit(root)
+    # 2.0.0：门禁事件流完整性 + 豁免统计（门禁是否被静默绕过/篡改）
+    report["gate_events"] = _gate_events_for_audit(root)
+    report["exemptions"] = _exemptions_for_audit(root)
     issues = []
     if report["state_authenticity"]:
         issues.append("状态文件非标准（疑似绕过 CLI 手工创建）")
@@ -845,6 +868,13 @@ def cmd_project_audit(args):
                       + ", ".join(report["orphan_files"][:5])
                       + ("…" if len(report["orphan_files"]) > 5 else "")
                       + "（移入对应节点产物目录并登记，或确认属源码/配置后豁免）")
+    if not report["gate_events"].get("intact", True):
+        issues.append(f"门禁事件流哈希链断裂（{report['gate_events'].get('broken_at')}）"
+                      f"——门禁历史被改动，评审结论不可信")
+    if report["exemptions"].get("total", 0) > 0:
+        issues.append(f"存在 {report['exemptions']['total']} 次门禁豁免"
+                      f"（{report['exemptions'].get('by_kind', {})}）——"
+                      f"豁免的 PASS 不等同于真通过，需人工复核")
     report["summary"] = {"healthy": not issues, "issues": issues}
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

@@ -191,6 +191,12 @@ def cmd_node_finish(args):
     # 2.0.0 产物存在性校验：不允许空产物标完成。
     # 判定标准：节点声明的 artifact 路径下必须至少有一个非占位文件
     # （忽略 .gitkeep / readme.txt / 空目录），否则拒绝 node-finish。
+    if node != "N0" and getattr(args, "allow_empty_artifacts", False):
+        try:
+            from state_events import record_exemption
+            record_exemption(root, "allow-empty-artifacts", node, executor)
+        except Exception:
+            pass
     if node != "N0" and not getattr(args, "allow_empty_artifacts", False):
         prod = _count_node_outputs(root, node)
         if prod == 0:

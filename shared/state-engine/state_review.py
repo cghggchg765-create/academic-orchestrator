@@ -36,6 +36,7 @@ def cmd_node_review(args):
         gate_id = REVIEW_GATE.get(node)
     if gate_id:
         gate = state["gates"].setdefault(gate_id, {"status": "pending"})
+        prev_status = gate.get("status", "pending")
         if args.result == "BLOCKED":
             gate.update({"status": "BLOCKED",
                          "agent": args.agent, "timestamp": now_iso(),
@@ -44,6 +45,15 @@ def cmd_node_review(args):
             gate.update({"status": "PASS" if args.result == "PASS" else "FAIL",
                          "agent": args.agent, "timestamp": now_iso(),
                          "result": f"{args.agent} 审阅{'通过' if args.result == 'PASS' else '未通过'}: {summary}"[:200]})
+        # 门禁事件流（append-only + 哈希链）：留下"谁、何时、凭什么"的可审计轨迹
+        try:
+            from state_events import record_gate_change
+            record_gate_change(root, gate_id, prev_status, gate["status"], args.agent,
+                               source_cmd="node-review", evidence=args.evidence or None,
+                               exemption=("lineage" if getattr(args, "allow_missing_lineage", False) else None),
+                               note=summary[:120])
+        except Exception as exc:  # 事件流失败不阻断主流程，但要在 stderr 提示
+            print(f"[state_utils] ⚠ 门禁事件记录失败: {exc}", file=sys.stderr)
     save_state(root, state)
     update_homepage_meta(node_homepage(root, node), state["nodes"][node].get("status", "pending"))
     rewrite_homepage_gates(node_homepage(root, node), gate_rows_for(state, node))

@@ -72,6 +72,36 @@ def _under(path: str, root: str) -> bool:
     return not (rel == os.pardir or rel.startswith(os.pardir + os.sep) or os.path.isabs(rel))
 
 
+def _read_jsonl(path):
+    """读 JSONL，跳过损坏行并返回 (records, corrupt_count)。
+
+    原来直接 json.loads 每行，一行半截就让整个节点快照不可读、续跑能力归零。
+    现在坏行被跳过并计数，调用方可提示用户。
+    """
+    records, corrupt = [], 0
+    if not os.path.isfile(path):
+        return records, corrupt
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                corrupt += 1
+    return records, corrupt
+
+
+def _append_jsonl(path, record):
+    """原子追加一行 JSON。先读全量 + 追加 + 原子替换，避免中断留下半行。"""
+    records, corrupt = _read_jsonl(path)
+    body = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records)
+    body += json.dumps(record, ensure_ascii=False) + "\n"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    save_text_atomic(path, body)
+    return corrupt
+
+
 def cmd_checkpoint(args):
     root = os.path.abspath(args.dir)
     node = args.node
@@ -119,28 +149,27 @@ def cmd_checkpoint(args):
         "artifacts": artifacts,
         "note": args.note or "",
     }
-    with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    _append_jsonl(path, record)
 
     # 同步写一份人类可读摘要，便于中断后直接看
     md = os.path.join(ckpt_dir, f"{node}.md")
+    records, corrupt = _read_jsonl(path)
     lines = [f"# {node} {NODES[node]['name']} 进度快照", ""]
-    with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.strip():
-                continue
-            r = json.loads(line)
-            lines.append(f"## #{r['seq']} {r['phase']} · {r['ts']} · by {r['by']}")
-            if r["done"]:
-                lines.append("已完成: " + "; ".join(r["done"]))
-            if r["pending"]:
-                lines.append("待完成: " + "; ".join(r["pending"]))
-            if r["artifacts"]:
-                got = ", ".join(f"{a['path']}({a['state']})" for a in r["artifacts"])
-                lines.append("产物: " + got)
-            if r["note"]:
-                lines.append("备注: " + r["note"])
-            lines.append("")
+    if corrupt:
+        lines.append(f"> ⚠ 检测到 {corrupt} 行损坏记录（已跳过；完整数据见 {node}.jsonl）")
+        lines.append("")
+    for r in records:
+        lines.append(f"## #{r.get('seq')} {r.get('phase')} · {r.get('ts')} · by {r.get('by')}")
+        if r.get("done"):
+            lines.append("已完成: " + "; ".join(r["done"]))
+        if r.get("pending"):
+            lines.append("待完成: " + "; ".join(r["pending"]))
+        if r.get("artifacts"):
+            got = ", ".join(f"{a.get('path')}({a.get('state')})" for a in r["artifacts"])
+            lines.append("产物: " + got)
+        if r.get("note"):
+            lines.append("备注: " + r["note"])
+        lines.append("")
     save_text_atomic(md, "\n".join(lines))
     print(f"[state_utils] checkpoint #{seq} 已落盘: {CHECKPOINT_DIR}/{node}.jsonl（阶段: {args.phase}）")
 
@@ -152,17 +181,14 @@ def cmd_checkpoint_list(args):
         print(json.dumps({"node": args.node, "checkpoints": [], "resume_hint": "无快照，从头开始"},
                          ensure_ascii=False, indent=2))
         return
-    records = []
-    with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
-            if line.strip():
-                records.append(json.loads(line))
+    records, corrupt = _read_jsonl(path)
     if args.latest:
         records = records[-1:]
     last = records[-1] if records else {}
     out = {
         "node": args.node,
         "count": len(records),
+        "corrupt_lines": corrupt,
         "checkpoints": records,
         "resume_hint": (
             f"从 {last.get('phase')} 之后续跑；已完成 {len(last.get('done') or [])} 项，"
