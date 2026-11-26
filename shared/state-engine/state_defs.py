@@ -110,6 +110,9 @@ PROFILE_OF = {"N4": "code", "N5": "code", "N7": "paper", "N8": "paper"}
 # 节点审阅 → 主门禁映射（node-review PASS/FAIL 时写入该门禁）
 REVIEW_GATE = {"N1": "M1", "N2": "D1", "N3": "P1", "N4": "P2", "N5": "T1", "N6": "V1", "N7": "W2", "N8": "A3"}
 
+# 次要审阅者 → 其专属门禁（2.0.0）。B1 = 图表/表格文献对标门禁。
+SECONDARY_REVIEWER_GATE = {"mm-figure-table-benchmarker": "B1"}
+
 UPSTREAM = {
     "N1": [("N0", "需求确认")], "N2": [("N1", "选题拆解")], "N3": [("N1", "选题拆解"), ("N2", "数据处理")],
     "N4": [("N3", "建模")], "N5": [("N4", "代码")], "N6": [("N4", "代码"), ("N5", "调优")],
@@ -235,18 +238,35 @@ def load_registry(root):
     return {entry.get("id"): entry for entry in registry.get("nodes", []) if entry.get("id")}
 
 
+def expected_reviewers(node):
+    """节点的全部合法审阅者：主 reviewer + secondary_reviewers（2.0.0）。
+
+    secondary 用于「同一节点需要多个独立视角」的场景，例如 N6/N7/N8 除常规审阅外
+    还要由 mm-figure-table-benchmarker 出 B1（图表/表格文献对标）结论。
+    """
+    info = NODES[node]
+    out = []
+    if info.get("reviewer"):
+        out.append(info["reviewer"])
+    out.extend(info.get("secondary_reviewers") or [])
+    return out
+
+
 def expected_reviewer(node):
     return NODES[node].get("reviewer")
 
 
 def require_independent_reviewer(node, agent):
     expected = expected_reviewer(node)
+    allowed = expected_reviewers(node)
     if not agent:
         sys.exit("[state_utils] 必须指定独立审阅 Agent")
     if node != "N8" and agent == NODES[node].get("executor"):
         sys.exit(f"[state_utils] 拒绝自评: {agent} 不能审阅自身执行的 {node}")
-    if expected and agent != expected:
-        sys.exit(f"[state_utils] 审阅 Agent 不匹配: {node} 需要 {expected}，实际为 {agent}")
+    if expected and agent not in allowed:
+        sys.exit(f"[state_utils] 审阅 Agent 不匹配: {node} 需要 {expected}"
+                 + (f" 或 {', '.join(allowed[1:])}" if len(allowed) > 1 else "")
+                 + f"，实际为 {agent}")
 
 
 def skill_basename(skill):
@@ -262,9 +282,33 @@ def normalized_skill_set(skills):
     return {skill_basename(s) for s in skills if str(s).strip()}
 
 
-def require_review_skills(node, skills):
+# 次要审阅者的专项必读 skill（2.0.0）。不继承执行方规范，避免角色边界混乱。
+SECONDARY_REVIEWER_SKILLS = {
+    "mm-figure-table-benchmarker": [
+        "academic-orchestrator:figure-table-benchmark",
+        "academic-orchestrator:mm-iteration-engine",
+    ],
+}
+
+
+def reviewer_required_skills(node, agent=None):
+    """某审阅者在本节点必须声明的 skill 清单。
+
+    2.0.0：同一节点可能有多个审阅视角——
+      - 主 reviewer：沿用节点 required_skills（它要核对执行产物与规范）；
+      - secondary reviewer（如 mm-figure-table-benchmarker）：只需它自己的专项规范，
+        不应被强制声明执行方规范（mm-visualization 等），否则角色边界混乱。
+    """
+    info = NODES[node]
+    secondaries = info.get("secondary_reviewers") or []
+    if agent and agent in secondaries and agent != info.get("reviewer"):
+        return SECONDARY_REVIEWER_SKILLS.get(agent, [])
+    return info.get("skills", [])
+
+
+def require_review_skills(node, skills, agent=None):
     declared = normalized_skill_set(skills.split(","))
-    required_list = NODES[node].get("skills", [])
+    required_list = reviewer_required_skills(node, agent)
     missing_keys = normalized_skill_set(required_list) - declared
     if missing_keys:
         # 报告原始注册名（带插件前缀），便于直接复制到 --skills
@@ -575,4 +619,4 @@ def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
         f"  或显式传 --allow-missing-mcp 豁免（仅离线/人工特批，须在交付说明中留痕）。"
     )
 
-__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]
+__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]

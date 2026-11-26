@@ -10,7 +10,7 @@ def cmd_node_review(args):
     node = args.node
     info = NODES[node]
     require_independent_reviewer(node, args.agent)
-    require_review_skills(node, args.skills)
+    require_review_skills(node, args.skills, agent=args.agent)
     # 防审阅偷懒：FAIL/BLOCKED 必须附证据路径（evidence）
     if args.result in {"FAIL", "BLOCKED"} and not (args.evidence or "").strip():
         sys.exit(f"[state_utils] {args.result} 审阅必须提供 --evidence（证据路径，防走过场）")
@@ -23,7 +23,14 @@ def cmd_node_review(args):
     evidence = args.evidence or "-"
     append_table_row(node_homepage(root, node), "审阅记录",
                      f"| {now_iso()} | {args.agent} | {skills} | {args.result} | {summary} | 证据: {evidence} |")
-    gate_id = REVIEW_GATE.get(node)
+    # 门禁路由（2.0.0）：主审阅者写 REVIEW_GATE 指定的主门禁；
+    # secondary 审阅者（如 mm-figure-table-benchmarker）写它自己的专项门禁，
+    # 不得覆盖主门禁——否则「对标通过」会被误当成「格式规范通过」。
+    secondaries = NODES[node].get("secondary_reviewers") or []
+    if args.agent in secondaries and args.agent != NODES[node].get("reviewer"):
+        gate_id = SECONDARY_REVIEWER_GATE.get(args.agent)
+    else:
+        gate_id = REVIEW_GATE.get(node)
     if gate_id:
         gate = state["gates"].setdefault(gate_id, {"status": "pending"})
         if args.result == "BLOCKED":
@@ -52,7 +59,7 @@ def cmd_auto_check(args):
         sys.exit(f"[state_utils] --gate 必须是 H1/H2/H3，实际 {gate}")
     # 核查 Agent 必须是该节点配对审阅 Agent（自动核查 = 独立 Agent 受托执行）
     require_independent_reviewer(node, args.agent)
-    require_review_skills(node, args.skills)
+    require_review_skills(node, args.skills, agent=args.agent)
     summary = args.summary or "自动核查通过"
     report_path = args.report or ""
     if report_path and not os.path.isfile(os.path.join(root, report_path)):

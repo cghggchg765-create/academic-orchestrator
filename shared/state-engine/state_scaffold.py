@@ -594,6 +594,9 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
                      "required_skills": info["skills"], "gates": info["gates"], "artifact_dir": info["artifact"],
                      "homepage": f"{STATE_DIR}/nodes/{info['dir']}/dashboard.md",
                      "upstream": [up for up, _ in UPSTREAM.get(nid, [])]}
+            # 2.0.0：次要审阅者（如 B1 门禁的图表对标审阅）随节点透传进项目 registry
+            if info.get("secondary_reviewers"):
+                entry["secondary_reviewers"] = info["secondary_reviewers"]
             registry["nodes"].append(entry)
         save_json_atomic(os.path.join(root, REGISTRY_FILE), registry)
 
