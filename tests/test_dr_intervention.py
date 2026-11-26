@@ -138,9 +138,9 @@ class DRInterventionTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
 
     def test_dr_link_in_collaboration_loop_table_matches_roles(self):
-        """规格中 Deep Research 链四角色与命令 --role 约定一致。"""
-        spec = (ROOT / "docs" / "optimization" / "agent-collaboration-loop.md")
-        self.assertTrue(spec.exists(), "缺少统一规格文档 agent-collaboration-loop.md")
+        """DR 链四角色与命令 --role 约定一致（规格文档已归档到 v1.x 区）。"""
+        spec = (ROOT / "docs" / "archive" / "v1.x-optimization" / "agent-collaboration-loop.md")
+        self.assertTrue(spec.exists(), "缺少 DR 链规格文档（应归档于 docs/archive/v1.x-optimization/）")
         text = spec.read_text(encoding="utf-8")
         for role in ("research_architect", "literature", "researcher", "synthesis", "report_compiler"):
             self.assertIn(role, text)

@@ -74,18 +74,21 @@ metadata:
 
 ### 🔴 全系统调用地图（完整流程 = 全部 24 Agent + 34 Skill 都被调用）
 
-| 工作流 | 调用的 Agent（24） | 加载/引用的 Skill（34） |
+| 工作流 | 调用的 Agent（21） | 加载/引用的 Skill（23） |
 |---|---|---|
-| 数学建模 Phase 0-8 | orchestrator, selector, dataprep, modeler, coder, tuner, visualization, writing, reviewer, mm-code-reviewer, mm-viz-reviewer, humanize | mathematical-modeling, mm-iteration-engine, mm-algorithm-dev, mm-data-preprocessing, mm-model-library, mm-model-tuning, mm-problem-analysis, mm-self-review, mm-visualization, mm-latex-writing, sync-and-compatibility, code-review, humanizer, academic-humanize, metrics-analysis, drawio-skill, make-pdf, xlsx, latex-guard |
-| 学术论文（academic-paper） | design, writing, visualization, typesetting, polish, audit, literature, humanize, latex_linter | academic-paper, academic-pipeline, academic-paper-reviewer, academic-humanize, humanizer, theme-factory, metrics-analysis, latex-guard, make-pdf, xlsx, drawio-skill |
-| 深度研究（deep-research） | research_architect_agent, synthesis_agent, report_compiler_agent, literature, researcher | deep-research, academic-paper |
-| 统计分析 | design, execute, analyze, visualization | academic-paper, metrics-analysis, xlsx |
-| LaTeX 编译 | latex_linter | latex-guard, make-pdf, mm-pdf-vision |
-| 通用开发（coder 通用模式等） | coder（及其他通用开发子任务） | code-philosophy, test-driven-development, systematic-debugging, investigate, receiving-code-review, subagent-driven-development, problem-solving, frontend-design, frontend-philosophy |
+| 数学建模 Phase 0-8 | selector, dataprep, modeler, coder, tuner, visualization, writing, reviewer, mm-code-reviewer, mm-viz-reviewer, mm-figure-table-benchmarker, humanize | mathematical-modeling, mm-iteration-engine, mm-algorithm-dev, mm-data-preprocessing, mm-model-library, mm-model-tuning, mm-problem-analysis, mm-self-review, mm-visualization, mm-latex-writing, figure-table-benchmark, sync-and-compatibility, code-review, humanizer, academic-humanize, metrics-analysis, latex-guard |
+| 学术论文（academic-paper） | design, writing, visualization, typesetting, polish, audit, literature, humanize, latex_linter | 外部 `academic-research-skills:academic-paper / academic-paper-reviewer / academic-pipeline`；本插件原生：academic-humanize, humanizer, metrics-analysis, latex-guard, figure-table-benchmark |
+| 深度研究（deep-research） | literature, researcher | 外部 `academic-research-skills:deep-research / academic-paper`（三个 ARS agent 由该插件提供，本插件不再持有副本） |
+| 统计分析 | design, execute, analyze, visualization | metrics-analysis, code-review, figure-table-benchmark |
+| LaTeX 编译 | latex_linter | latex-guard, mm-pdf-vision |
+| 通用开发（coder 通用模式等） | coder（及其他通用开发子任务） | code-philosophy, code-review, problem-solving, frontend-philosophy |
+| 编排与路由 | （主 Agent 自身） | academic-orchestration, mm-skill-router |
 
-> 24 个 Agent 与 34 个 skill 全部在这 6 行内有归属（lint 的"全组件引用契约"强制：任何组件若在系统内无引用即报错）。数学建模完整流程覆盖第 1 行全部组件；全局跑一遍各工作流则覆盖全部组件。
+> **组件口径（2.0.0）**：21 个 Agent / 23 个 Skill / 7 个命令，以 `scripts/lint_contracts.py` 的 `EXPECTED_COUNTS` 为准。
 >
-> 🔴 **ARS Agent 命名映射**：deep-research 三个学术 agent 的文件名为 `research_architect_agent.md` / `synthesis_agent.md` / `report_compiler_agent.md`（frontmatter name 同名），实际派发 subagent_type 使用 ARS 命名空间别名 `research_architect_agent` / `synthesis_agent` / `report_compiler_agent`（同一 Agent，双名等价）。下方委托表沿用 ARS 别名以保证与子代理注册一致。
+> 🔴 **已删除的第三方副本不再出现在任何"必读 skill"里**：`xlsx / frontend-design / theme-factory / test-driven-development / systematic-debugging / receiving-code-review / subagent-driven-development / drawio-skill / make-pdf / investigate` 已在 2.0.0 物理删除。需要时由 `mm-skill-router` **运行时扫描本机已装 skill** 自动匹配（如本机装了 `spreadsheets:xlsx` 就会命中）；未装则该能力记为 `unresolved` 并如实报告，**不得写死 skill 名、不得假装可用**。
+>
+> 🔴 **编排者就是主 Agent**：不存在可委托的 `orchestrator` agent；`build` agent 也不存在（构建检查由 `latex_linter` 承担）。子 Agent 无法再派子 Agent（宿主剔除 `Agent`/`Task`）。
 
 ### 🔴 职责边界矩阵（任务-职能匹配：每个 Agent 负责什么 / 不负责什么 / 交接给谁）
 
