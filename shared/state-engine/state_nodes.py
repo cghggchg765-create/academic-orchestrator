@@ -66,6 +66,11 @@ def cmd_node_start(args):
             sys.exit(f"[state_utils] 前置条件未满足: {info}")
 
     state["nodes"][node]["status"] = "in_progress"
+    # P1-10：记录开工时的产物快照，作为"是否真的产出"的基准。
+    # 有了它，脚手架预建文件天然不算产出（快照未变 = 没做任何事），
+    # 不需要再靠逐个列哨兵字符串去猜哪些文件是占位。
+    if node != "N0":
+        state["nodes"][node]["start_artifact_hash"] = artifact_snapshot(root, node)
     if args.goal:
         state["nodes"][node]["goal"] = args.goal
     state["meta"]["current_stage"] = NODES[node]["stage"]
@@ -176,37 +181,19 @@ def cmd_node_finish(args):
     state["nodes"][node]["executed_by"] = executor
     if node != "N0":
         state["nodes"][node]["skills_used"] = [s.strip() for s in (args.skills or "").split(",") if s.strip()]
-    # 2.0.0 分阶段归档校验：非 N0 节点收工前至少要有一次进度快照。
-    # 目的：长任务中断后能续跑；没有快照说明执行方是"一口气做完"，一旦中断全部白做。
-    if node != "N0" and not getattr(args, "allow_no_checkpoint", False):
-        ckpt = os.path.join(root, "state", "checkpoints", f"{node}.jsonl")
-        if not (os.path.isfile(ckpt) and os.path.getsize(ckpt) > 0):
-            sys.exit(
-                f"[state_utils] 拒绝：节点 {node} 没有任何进度快照（state/checkpoints/{node}.jsonl）。\n"
-                f"  分阶段归档是硬要求——每个 Phase 结束应落一次快照，中断后才可续跑：\n"
-                f"    python state/state_utils.py checkpoint {node} --phase \"<Phase N>\" "
-                f"--done \"<已完成>\" --pending \"<待完成>\" --artifact <产物>\n"
-                f"  若该节点确实为单步动作，可加 --allow-no-checkpoint 并说明原因。"
-            )
-    # 2.0.0 产物存在性校验：不允许空产物标完成。
-    # 判定标准：节点声明的 artifact 路径下必须至少有一个非占位文件
-    # （忽略 .gitkeep / readme.txt / 空目录），否则拒绝 node-finish。
-    if node != "N0" and getattr(args, "allow_empty_artifacts", False):
+    # 2.0.0 分阶段归档 + 产物存在性校验：抽成共享函数，保证 round-decide /
+    # scope-promote 等"另一条标 completed 的路径"也执行同一套校验（P1-8）。
+    require_node_deliverables(
+        root, node,
+        allow_empty=getattr(args, "allow_empty_artifacts", False),
+        allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
+    )
+    if getattr(args, "allow_empty_artifacts", False):
         try:
             from state_events import record_exemption
             record_exemption(root, "allow-empty-artifacts", node, executor)
         except Exception:
             pass
-    if node != "N0" and not getattr(args, "allow_empty_artifacts", False):
-        prod = _count_node_outputs(root, node)
-        if prod == 0:
-            sys.exit(
-                f"[state_utils] 拒绝：节点 {node}（{NODES[node]['name']}）声明的产物目录 "
-                f"{NODES[node]['artifact']} 下没有任何实际产出文件。\n"
-                f"  禁止「空产物标完成」——请先产出本节点应有的交付物"
-                f"（如 N2 的 Data/DataLog.md 与实际数据文件、N4 的 Code/、N7 的 ReportPaper/）。\n"
-                f"  若该节点确实无需产出（异常情况），请加 --allow-empty-artifacts 并说明原因。"
-            )
     # 产物快照登记：级联失效（cascade-invalidate）据此检测上游变更 → 下游联动重置
     state["nodes"][node]["artifact_hash"] = artifact_snapshot(root, node)
     for art in args.artifact or []:
@@ -243,11 +230,19 @@ SCAFFOLD_TEMPLATES = {
     "logrecord/daily-log.md": ("待填写", "占位"),
     "logrecord/bug-fix-log.md": ("待填写", "占位"),
     "logrecord/version-update.md": ("待填写", "占位"),
+    # P1-10：N1 产物同样是脚手架预建占位
+    "probleminfo/problemnotes.md": ("待填写", "占位"),
+    "probleminfo/keyrequirements.md": ("待填写", "占位"),
+    # N4 代码骨架：stub 里带 NotImplementedError 说明，视为未实现
+    "code/main.py": ("NotImplementedError", "请按"),
+    "code/config.py": ("TODO", "占位"),
 }
+# 代码骨架占位：problem_N/*.py 与 visualization/*.py 里的 stub 标记
+CODE_STUB_MARKERS = ("NotImplementedError", "raise NotImplementedError", "TODO: implement")
 
 
 def _is_filled(path, rel):
-    """判断文件是否为真实产出（非占位文件、非未填写的空模板）。"""
+    """判断文件是否为真实产出（非占位文件、非未填写的空模板、非未实现的代码 stub）。"""
     base = os.path.basename(path).lower()
     if base in PLACEHOLDER_NAMES:
         return False
@@ -259,15 +254,46 @@ def _is_filled(path, rel):
                 body = fh.read()
         except OSError:
             return False
-        # 只要还带着"占位/待填写"哨兵，就视为未产出
         if any(m in body for m in markers):
+            return False
+        return True
+    # 代码文件：脚手架生成的骨架都带 NotImplementedError/TODO 占位
+    if norm.endswith(".py") and ("/problem_" in norm or "/visualization/" in norm):
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                body = fh.read()
+        except OSError:
+            return False
+        if any(m in body for m in CODE_STUB_MARKERS):
             return False
     return True
 
 
 def _count_node_outputs(root, node):
-    """统计节点声明产物目录下的真实产出数（排除占位文件与未填写的空模板）。"""
+    """统计节点声明产物目录下的真实产出数。
+
+    判定顺序（P1-10 根本方案）：
+      1. 若节点记录了 start_snapshot（node-start 时的产物快照），
+         则"真实产出 = 当前快照中与 start_snapshot 不同的文件"——
+         这对脚手架预建文件天然免疫，不需要逐个列哨兵。
+      2. 无快照时退回占位/模板/代码 stub 启发式判定。
+    """
     paths = [p.strip() for p in NODES[node].get("artifact", "").split(",") if p.strip()]
+    start_snapshot = None
+    try:
+        state = load_state(root)
+        start_snapshot = (state.get("nodes", {}).get(node) or {}).get("start_artifact_hash")
+    except (OSError, ValueError, KeyError):
+        start_snapshot = None
+
+    current = artifact_snapshot(root, node)
+    if isinstance(start_snapshot, dict) and start_snapshot:
+        # 目录级快照：任一产物根的哈希发生变化即视为有产出
+        changed = [k for k, v in current.items() if start_snapshot.get(k) != v]
+        if changed:
+            return len(changed)
+        return 0
+
     total = 0
     for rel_root in paths:
         full_root = os.path.join(root, rel_root)
@@ -338,6 +364,34 @@ def _auto_register_outputs(root, node, executor):
         os.makedirs(os.path.dirname(reg_path), exist_ok=True)
         save_json_atomic(reg_path, reg)
         print(f"[state_utils] 已自动登记 {added} 个产物到 state/reports/artifacts-registry.json")
+
+
+def require_node_deliverables(root, node, allow_empty=False, allow_no_checkpoint=False):
+    """节点交付物完整性校验（供 node-finish 与 round-decide / scope-promote 共用）。
+
+    2.0.0 修复 P1-8：迭代节点（N4/N5/N7/N8）的 completed 由 round-decide 直接写，
+    从不经过 node-finish，导致 checkpoint 与产物校验对"最需要它的长任务"完全失效。
+    把校验抽成函数，任何"把节点标 completed"的路径都必须调用它。
+    """
+    if node == "N0":
+        return
+    if not allow_no_checkpoint:
+        ckpt = os.path.join(root, "state", "checkpoints", f"{node}.jsonl")
+        if not (os.path.isfile(ckpt) and os.path.getsize(ckpt) > 0):
+            sys.exit(
+                f"[state_utils] 拒绝：节点 {node} 没有任何进度快照（state/checkpoints/{node}.jsonl）。\n"
+                f"  分阶段归档是硬要求——每个 Phase 结束应落一次快照，中断后才可续跑：\n"
+                f"    python state/state_utils.py checkpoint {node} --phase \"<Phase N>\" "
+                f"--done \"<已完成>\" --pending \"<待完成>\" --artifact <产物>\n"
+                f"  若该节点确实为单步动作，可加 --allow-no-checkpoint 并说明原因。"
+            )
+    if not allow_empty:
+        if _count_node_outputs(root, node) == 0:
+            sys.exit(
+                f"[state_utils] 拒绝：节点 {node}（{NODES[node]['name']}）声明的产物目录 "
+                f"{NODES[node]['artifact']} 下没有任何实际产出文件。\n"
+                f"  禁止「空产物标完成」——请先产出本节点应有的交付物。"
+            )
 
 
 def cmd_node_log(args):

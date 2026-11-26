@@ -32,7 +32,14 @@ class MCPGatesTest(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def run_state(self, *args, check=True):
-        return subprocess.run(["python", str(STATE), *args], text=True, capture_output=True, check=check)
+        argv = list(args)
+        # 本文件用例验证门禁/评分逻辑，不验证交付物产出；
+        # 交付物校验由 tests/test_v2_gates.py 的 IterationDeliverableTest 覆盖。
+        if argv and argv[0] == "round-decide":
+            for flag in ("--allow-empty-artifacts", "--allow-no-checkpoint"):
+                if flag not in argv:
+                    argv.append(flag)
+        return subprocess.run(["python", str(STATE), *argv], text=True, capture_output=True, check=check)
 
     def lock_problem(self):
         problem = self.tmp / "problem.md"

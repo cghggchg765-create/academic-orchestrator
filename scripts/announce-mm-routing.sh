@@ -1,24 +1,27 @@
 #!/usr/bin/env bash
-# version: 1.0.0
+# version: 2.0.0
 #
-# SessionStart hook script for the math-modeling-agent-system plugin.
+# SessionStart hook for the academic-orchestrator plugin.
 #
-# Injects the MM routing doctrine into the LLM's first turn so that, even in a
-# plain chat (no /mm command), the main agent knows HOW to route "审阅/修改/
-# 润色/质检论文" style requests: delegate to the specialized subagents via the
-# Agent tool, forbidden to inline-edit node artifacts, and complete the
-# verify loop (writing → reviewer → latex_linter → compile) before returning.
+# Injects routing doctrine into the first turn so that, even in a plain chat
+# (no /mm command), the main agent knows HOW to route academic work: load the
+# orchestration protocol, dispatch per-node subagents, and never inline-edit
+# node artifacts.
 #
-# Why this exists: subagent definitions are all `mode: subagent` + `hidden: true`
-# and no built-in routing forces the main agent to use them. Before this hook,
-# a plain chat request like "审阅并修改论文" caused the main agent to load
-# `mm-latex-writing` itself and edit every .tex inline — no state protocol, no
-# reviewer, no latex_linter, no compile verify (observed incident, 2026-08).
+# Why this exists: subagent definitions are not auto-invoked, and no built-in
+# routing forces the main agent to use them. Observed incident (2026-08): a
+# plain "审阅并修改论文" request made the main agent load mm-latex-writing itself
+# and edit every .tex inline — no state protocol, no reviewer, no compile verify.
 #
-# Same contract as announce-ars-loaded.sh: reads the SessionStart event JSON on
-# stdin, emits hookSpecificOutput.additionalContext. Exit 0 always; on any
-# parse/emit failure it must never block the session.
+# 2.0.0 rework: the old text was stale in ways that actively misled the agent
+# every single session — it advertised the pre-rename namespace
+# (math-modeling-agent-system:), claimed 24 Agent / 34 Skill / 22 命令, and told
+# the agent to load skills that were physically deleted in 2.0.0 (xlsx,
+# drawio-skill, theme-factory, make-pdf) plus /ars-* commands this repo no longer
+# ships. Counts are now read from .zcode-plugin/plugin.json so they cannot drift.
 #
+# Contract: reads SessionStart JSON on stdin, emits
+# hookSpecificOutput.additionalContext, always exits 0 (never block a session).
 # Bash 3.2 / POSIX sh compatible (runs under Git Bash on Windows).
 
 set -euo pipefail
@@ -35,33 +38,70 @@ if [[ -n "${INPUT}" ]]; then
   fi
 fi
 
+# --- 从 plugin.json 读取真实版本与组件计数（单一事实源，避免再次漂移）---
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-${ZCODE_PLUGIN_ROOT:-}}"
+VERSION="?"
+NDESC=""
+if [[ -n "${PLUGIN_ROOT}" ]]; then
+  MANIFEST="${PLUGIN_ROOT}/.zcode-plugin/plugin.json"
+  if [[ -f "${MANIFEST}" ]]; then
+    if command -v python >/dev/null 2>&1; then
+      READ=$(python - "${MANIFEST}" <<'PY' 2>/dev/null || true
+import json, re, sys
+try:
+    d = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    sys.exit(0)
+ver = d.get("version", "?")
+desc = d.get("description", "") or ""
+m = re.search(r"(\d+)\s*个\s*Skill\s*\+\s*(\d+)\s*个\s*Agent\s*\+\s*(\d+)\s*个命令", desc)
+counts = f"{m.group(2)} Agent / {m.group(1)} Skill / {m.group(3)} 命令" if m else ""
+print(ver, "|", counts)
+PY
+)
+      if [[ -n "${READ}" ]]; then
+        VERSION="${READ%%|*}"
+        NDESC="${READ#*|}"
+        VERSION="$(printf '%s' "${VERSION}" | tr -d '[:space:]')"
+        NDESC="$(printf '%s' "${NDESC}" | sed 's/^ *//')"
+      fi
+    fi
+  fi
+fi
+
+CORE_NOTE="${NDESC:-组件计数见 scripts/lint_contracts.py 的 EXPECTED_COUNTS}"
+
 case "${SOURCE}" in
   compact|resume)
-    ANNOUNCE="学术研究与数学建模系统已加载（通用学术 + 建模双轨）。先判定任务属于哪一轨再动手：普通论文/综述/审稿/绘图/数据分析 → 通用学术轨（academic-paper / deep-research / academic-paper-reviewer / visualization）；数学建模竞赛 → 建模轨（/mm* 命令 + mathematical-modeling）。禁止把竞赛规则套到普通论文上。"
+    ANNOUNCE="academic-orchestrator v${VERSION} 已加载。先判轨再动手：普通论文/综述/审稿/绘图/数据分析走通用学术轨（本插件提供编排骨架，学术界主体能力由 academic-research-skills 提供）；数学建模竞赛走建模轨（/mm* + mathematical-modeling）。禁止把竞赛规则套到普通论文上。"
     ;;
   startup|clear|*)
-    ANNOUNCE="学术研究与数学建模多智能体系统已加载：24 Agent / 34 Skill / 22 命令。
+    ANNOUNCE="academic-orchestrator v${VERSION} 已加载（${CORE_NOTE}）。
 
-🔴 第一步永远是分流（判错轨比不做更糟）：
+🔴 第一步永远是判轨（判错比不做更糟）：
 
-【A 通用学术轨】论文写作与修订、文献综述、深度研究、模拟审稿、去 AI 化、数据分析与统计解释、出版级绘图、LaTeX 排版编译、PDF/Word/Excel 交付 —— 不要求是竞赛场景。
-  典型入口：academic-paper（写作/修订/摘要/格式转换）、deep-research（调研/综述/fact-check）、academic-paper-reviewer（审稿）、academic-pipeline（端到端）、humanizer + academic-humanize（去 AI 味）、visualization（出版级图表）、latex-guard（LaTeX 编译排错）、make-pdf（Markdown→PDF）、xlsx / drawio-skill / theme-factory（交付物与图示）。
+【A 通用学术轨】论文写作/修订、文献综述、深度研究、模拟审稿、去 AI 化、数据分析、出版级绘图、LaTeX 排版、PDF/Word/Excel 交付。
+  · 本插件提供：编排协议 academic-orchestration、状态机与门禁、graph/table 文献对标 figure-table-benchmark、去AI化 humanizer + academic-humanize、LaTeX 质检 latex-guard、图表规范 mm-visualization、运行时路由 mm-skill-router。
+  · 学术界主体能力由外部插件 academic-research-skills 提供：academic-paper / deep-research / academic-paper-reviewer / academic-pipeline。本插件不再持有其副本。
+  · 其余专业能力（表格 xlsx、演示 pptx、Word docx、PDF、绘图等）由 mm-skill-router 运行时扫描本机已装 skill 自动匹配；未安装则该能力记为 unresolved，如实报告，不要假装可用。
 
-【B 数学建模竞赛轨】仅当用户明确是数学建模竞赛（CUMCM/MCM/校赛、赛题、A/B/C/D/E 题、提交论文比赛）时启用：/mm 总控、mathematical-modeling、mm-problem-analysis、mm-model-library、mm-iteration-engine、mm-self-review、mm-latex-writing（国赛 10 节结构与 20 页限制）。
+【B 数学建模竞赛轨】仅当用户明确是数学建模竞赛（CUMCM/MCM/校赛、赛题、A/B/C/D/E 题）时启用：/mm 总控、mathematical-modeling、mm-problem-analysis、mm-model-library、mm-iteration-engine、mm-self-review、mm-latex-writing。
 
-【C 混合】竞赛项目内的论文写作/绘图 → 走 B 轨规范；其中通用的表达润色与代码调试可借用 A 轨技能。
+【C 混合】竞赛项目内的论文写作/绘图走 B 轨规范；通用润色与代码调试可借用 A 轨能力。
 
 🔴 派发规则：
-- 有对应专业子 Agent（writing/reviewer/visualization/latex_linter/humanize/coder/analyze/literature 等）时优先派发，subagent_type=math-modeling-agent-system:<name>；简单单点任务可直接加载对应 Skill。
-- 竞赛轨的节点产物（state 协议、ProblemInfo/、ResultFigures/、ReportPaper/）必须由子代理执行，主对话不内联代做。
-- 通用轨没有这个限制：常规论文写作/润色可直接完成，涉及长流程或需独立审阅时再派发。
+- 主 Agent 就是编排者：先加载 academic-orchestration，再按 registry 逐节点派发。不存在可委托的 orchestrator agent。
+- 子 Agent 无法再派子 Agent（宿主剔除 Agent/Task 工具），所有派发由主 Agent 在顶层完成。
+- 竞赛轨节点产物（ProblemInfo/、Data/、ModelDocs/、Code/、ResultFigures/、ReportPaper/）必须由对应子 Agent 执行，禁止主对话内联代做。
+- 派发时把 state/skill-routing/<节点>.json 的 must_load 写进 prompt；子 Agent 必须逐个加载并声明。
+- 长任务必须分阶段归档：每个 Phase 结束跑 state_utils.py checkpoint，中断后 checkpoint-list 续跑。
 
-🔴 与外部插件的协作（不要重复造轮子）：
-- 若已装 academic-research-skills 且其 academic-paper / deep-research / academic-paper-reviewer / academic-pipeline 更贴合任务，可直接用它的版本（含完整 ARS 管线）；本插件同名技能提供等价能力，二者择一，不要同时驱动。
-- 电子表格优先 spreadsheets:xlsx，演示文稿优先 presentations:pptx，Word 优先 documents:docx；本插件 xlsx/theme-factory 作为补充。
-- 用户级 AGENTS.md 的结构优先规则同样适用：skill 明确要求的结构优先于通用默认骨架。
+🔴 门禁不可绕过：
+- 审阅类门禁（M1/D1/P1/P2/T1/V1/B1/W2/A3）只能由 node-review 落盘，gate-set 无法伪造 PASS。
+- N2 的 D1 要求数据血缘台账通过 validate_data_lineage.py（raw 锁定 + 链式连续 + 变换可复现）。
+- N6/N7/N8 的 B1 要求图表/表格文献对标矩阵（≥3 篇同领域论文）。
 
-命令速查：/mm 建模总控、/mm-iterate 迭代、/mm-audit 接手审计、/ars-* 学术支撑。详见 docs/optimization/skill组合加载与命令路由.md。"
+命令速查：/mm 建模总控、/mm-iterate 迭代、/mm-audit 接手审计、/mm-help 总览、/academic-update 上游更新检查。"
     ;;
 esac
 

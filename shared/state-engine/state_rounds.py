@@ -298,6 +298,17 @@ def cmd_round_decide(args):
             state["nodes"][node]["status"] = "in_progress"
             state["nodes"][node]["optimization_available"] = True
         if action in merge_actions and action != "pass_continue":
+            # 2.0.0（P1-8）：迭代节点的 completed 由本命令写入，不走 node-finish，
+            # 因此必须在此执行同一套交付物校验（checkpoint + 真实产物）。
+            try:
+                from state_nodes import require_node_deliverables
+                require_node_deliverables(
+                    root, node,
+                    allow_empty=getattr(args, "allow_empty_artifacts", False),
+                    allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
+                )
+            except ImportError:
+                pass
             state["nodes"][node]["status"] = "completed"
             state["stages"][NODES[node]["stage"]]["status"] = "completed"
             state["stages"][NODES[node]["stage"]]["completed_at"] = now_iso()

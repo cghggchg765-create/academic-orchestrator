@@ -642,7 +642,11 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
         m_src = os.path.join(_module_dir, module)
         m_tgt = os.path.join(root, STATE_DIR, module)
         if os.path.isfile(m_src) and (force or sync_runtime or not os.path.exists(m_tgt)):
-            shutil.copyfile(m_src, m_tgt)
+            # 项目内运行（src == tgt 同一文件）时 shutil.copyfile 会抛 SameFileError。
+            # 这是文档推荐的 `python state/state_utils.py init --sync-runtime` 路径，
+            # 必须跳过而不是崩掉（P1-19）。
+            if os.path.abspath(m_src) != os.path.abspath(m_tgt):
+                shutil.copyfile(m_src, m_tgt)
 
     # 技能路由层落位：能力词表 + 发现/匹配模块复制进项目 state/skill-routing/，
     # 使 `python state/state_utils.py skill-plan <节点>` 在项目内可独立运行。
@@ -654,7 +658,8 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
             f_src = os.path.join(routing_src, fname)
             f_tgt = os.path.join(routing_tgt, fname)
             if os.path.isfile(f_src) and (force or sync_runtime or not os.path.exists(f_tgt)):
-                shutil.copyfile(f_src, f_tgt)
+                if os.path.abspath(f_src) != os.path.abspath(f_tgt):
+                    shutil.copyfile(f_src, f_tgt)
 
     refresh_dashboard(root)
 

@@ -215,6 +215,10 @@ def main():
     p.add_argument("--feedback")
     p.add_argument("--reason", help="未达标分支（repair_and_rerun/keep_best）必填：失败原因分析（根因/差距/下轮方案），写入 decision.failure_analysis")
     p.add_argument("--git", action="store_true"); p.add_argument("--dir", default=".")
+    p.add_argument("--allow-empty-artifacts", action="store_true",
+                   help="完成分支豁免空产物校验（仅异常情况，须说明原因）")
+    p.add_argument("--allow-no-checkpoint", action="store_true",
+                   help="完成分支豁免进度快照校验（仅单步节点，须说明原因）")
     p.set_defaults(func=cmd_round_decide)
 
     p = sub.add_parser("scope-plan", help="为 N4/N5/N7/N8 创建可选作用域工作区与派发计划")

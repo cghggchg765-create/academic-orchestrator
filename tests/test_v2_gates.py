@@ -298,6 +298,77 @@ class ArtifactRegistryTest(Base):
         self.assertIn("stray.txt", report["orphans"])
 
 
+class IterationDeliverableTest(Base):
+    """P1-8：迭代节点由 round-decide 标完成，绕过了 node-finish 的产物/快照校验。
+
+    round-decide 的完成分支现在必须走同一套 require_node_deliverables。
+    """
+
+    def test_require_node_deliverables_blocks_without_checkpoint(self):
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / "shared" / "state-engine"))
+        import state_nodes  # noqa: E402
+
+        with self.assertRaises(SystemExit) as ctx:
+            state_nodes.require_node_deliverables(str(self.project), "N4")
+        msg = str(ctx.exception.code)
+        self.assertIn("没有任何进度快照", msg)
+
+    def test_require_node_deliverables_blocks_empty_artifacts(self):
+        """有快照但仍无真实产出 → 拒绝。
+
+        注意：判定以 node-start 时的产物快照为基准（P1-10），所以必须先走 node-start
+        记录 start_artifact_hash，之后产出的文件才算数。
+        """
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / "shared" / "state-engine"))
+        import state_nodes  # noqa: E402
+
+        # 记录开工快照（模拟真实流程）
+        state_nodes.artifact_snapshot  # 存在性检查
+        st = self.decision()
+        st["nodes"]["N4"]["start_artifact_hash"] = state_nodes.artifact_snapshot(
+            str(self.project), "N4")
+        (self.project / "state" / "decision_log.json").write_text(
+            json.dumps(st, ensure_ascii=False), encoding="utf-8")
+
+        ck = self.project / "state" / "checkpoints" / "N4.jsonl"
+        ck.parent.mkdir(parents=True, exist_ok=True)
+        ck.write_text('{"seq":1,"phase":"P1","done":["x"],"pending":[],"artifacts":[]}\n',
+                      encoding="utf-8")
+        with self.assertRaises(SystemExit) as ctx:
+            state_nodes.require_node_deliverables(str(self.project), "N4")
+        self.assertIn("没有任何实际产出文件", str(ctx.exception.code))
+
+    def test_require_node_deliverables_passes_with_both(self):
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / "shared" / "state-engine"))
+        import state_nodes  # noqa: E402
+
+        ck = self.project / "state" / "checkpoints" / "N4.jsonl"
+        ck.parent.mkdir(parents=True, exist_ok=True)
+        ck.write_text('{"seq":1,"phase":"P1","done":["x"],"pending":[],"artifacts":[]}\n',
+                      encoding="utf-8")
+        code = self.project / "Code"
+        code.mkdir(parents=True, exist_ok=True)
+        (code / "main.py").write_text("# real code\n" * 20, encoding="utf-8")
+        state_nodes.require_node_deliverables(str(self.project), "N4")  # 不应抛
+
+
+class CheckpointSubstanceTest(Base):
+    """P1-9：空壳 checkpoint（无 done/pending/artifact）仍可落盘，但要能看出无信息可用。"""
+
+    def test_empty_checkpoint_still_records_but_flags(self):
+        r = self.state("checkpoint", "N2", "--phase", "Phase1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.state("checkpoint-list", "N2", "--latest")
+        out = json.loads(r.stdout)
+        last = out["checkpoints"][0]
+        self.assertEqual(last["done"], [])
+        self.assertEqual(last["pending"], [])
+        self.assertIn("resume_hint", out)
+
+
 class CheckpointTest(Base):
     """分阶段归档：快照落盘、可读回、含 resume_hint。"""
 
