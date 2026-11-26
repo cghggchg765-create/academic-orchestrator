@@ -73,6 +73,9 @@ class Base(unittest.TestCase):
             "## 约束\n预算上限、产能上限、交付期。\n\n"
             "## 数据清单\n历史销量、价格、产能表（赛题附件）。\n\n"
             "## 题型判定\n优化类（连续变量）。\n", encoding="utf-8")
+        # 分阶段归档是 node-finish 硬要求
+        self.state("checkpoint", "N1", "--phase", "Phase 1 选题拆解",
+                   "--done", "目标/约束/数据清单", "--artifact", "ProblemInfo/ProblemNotes.md")
         self.state("node-finish", "N1", "--agent", "selector",
                    "--skills", "mm-problem-analysis,mm-self-review")
         self.state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
@@ -84,8 +87,19 @@ class Base(unittest.TestCase):
 class EmptyArtifactTest(Base):
     """空产物不得标完成（防止"什么都没做也算完成"）。"""
 
-    def test_rejects_empty_artifacts(self):
+    def test_rejects_missing_checkpoint(self):
+        """分阶段归档是硬要求：无快照时 node-finish 被拒（先于产物校验）。"""
         self.reach_n2()
+        r = self.state("node-finish", "N2", "--agent", "dataprep",
+                       "--skills", "mm-data-preprocessing", check=False)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("没有任何进度快照", r.stderr)
+
+    def test_rejects_empty_artifacts(self):
+        """有快照但无真实产物 → 拒绝（空产物不得标完成）。"""
+        self.reach_n2()
+        self.state("checkpoint", "N2", "--phase", "Phase 0 数据探查",
+                   "--done", "探查完成", "--pending", "清洗")
         r = self.state("node-finish", "N2", "--agent", "dataprep",
                        "--skills", "mm-data-preprocessing", check=False)
         self.assertNotEqual(r.returncode, 0, "空产物应被拒绝")
@@ -95,6 +109,8 @@ class EmptyArtifactTest(Base):
         self.reach_n2()
         (self.project / "Data" / "raw").mkdir(parents=True, exist_ok=True)
         (self.project / "Data" / "raw" / "d.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+        self.state("checkpoint", "N2", "--phase", "Phase 1 清洗",
+                   "--done", "生成清洗数据", "--artifact", "Data/raw/d.csv")
         r = self.state("node-finish", "N2", "--agent", "dataprep",
                        "--skills", "mm-data-preprocessing")
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -104,6 +120,7 @@ class EmptyArtifactTest(Base):
         self.reach_n2()
         datalog = self.project / "Data" / "DataLog.md"
         self.assertTrue(datalog.exists(), "脚手架应预建 DataLog.md")
+        self.state("checkpoint", "N2", "--phase", "Phase 0", "--done", "探查")
         r = self.state("node-finish", "N2", "--agent", "dataprep",
                        "--skills", "mm-data-preprocessing", check=False)
         self.assertNotEqual(r.returncode, 0, "仅空模板时应被拒绝")
@@ -111,7 +128,8 @@ class EmptyArtifactTest(Base):
     def test_explicit_exemption(self):
         self.reach_n2()
         r = self.state("node-finish", "N2", "--agent", "dataprep",
-                       "--skills", "mm-data-preprocessing", "--allow-empty-artifacts")
+                       "--skills", "mm-data-preprocessing",
+                       "--allow-empty-artifacts", "--allow-no-checkpoint")
         self.assertEqual(r.returncode, 0, r.stderr)
 
 

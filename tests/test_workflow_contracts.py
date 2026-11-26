@@ -80,8 +80,13 @@ class WorkflowContractsTest(unittest.TestCase):
         argv = list(args)
         # 本文件用例验证状态机流转，不验证产物产出；空产物校验由 test_workflow_gates 的
         # 专门用例覆盖。故对 node-finish 统一补豁免，避免用例被迫造假产物。
-        if argv and argv[0] == "node-finish" and "--allow-empty-artifacts" not in argv:
-            argv.append("--allow-empty-artifacts")
+        if argv and argv[0] == "node-finish":
+            # 本文件用例验证状态机流转，不验证产物/归档产出；
+            # 空产物与无快照校验由 tests/test_v2_gates.py 专门覆盖。
+            if "--allow-empty-artifacts" not in argv:
+                argv.append("--allow-empty-artifacts")
+            if "--allow-no-checkpoint" not in argv:
+                argv.append("--allow-no-checkpoint")
         return subprocess.run(["python", str(STATE), *argv], text=True, capture_output=True,
                               check=check, env=env)
 

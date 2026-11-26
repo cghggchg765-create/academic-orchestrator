@@ -123,6 +123,8 @@ def main():
     p.add_argument("--artifact", action="append"); p.add_argument("--dir", default=".")
     p.add_argument("--allow-empty-artifacts", action="store_true",
                    help="允许产物目录为空时仍标完成（仅异常情况，须说明原因并留痕）")
+    p.add_argument("--allow-no-checkpoint", action="store_true",
+                   help="允许无进度快照时标完成（仅单步节点，须说明原因并留痕）")
     p.set_defaults(func=cmd_node_finish)
 
     p = sub.add_parser("node-review", help="登记节点审阅记录（审阅 Agent 调用；FAIL/BLOCKED 必须附 evidence）")

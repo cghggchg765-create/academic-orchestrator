@@ -176,6 +176,18 @@ def cmd_node_finish(args):
     state["nodes"][node]["executed_by"] = executor
     if node != "N0":
         state["nodes"][node]["skills_used"] = [s.strip() for s in (args.skills or "").split(",") if s.strip()]
+    # 2.0.0 分阶段归档校验：非 N0 节点收工前至少要有一次进度快照。
+    # 目的：长任务中断后能续跑；没有快照说明执行方是"一口气做完"，一旦中断全部白做。
+    if node != "N0" and not getattr(args, "allow_no_checkpoint", False):
+        ckpt = os.path.join(root, "state", "checkpoints", f"{node}.jsonl")
+        if not (os.path.isfile(ckpt) and os.path.getsize(ckpt) > 0):
+            sys.exit(
+                f"[state_utils] 拒绝：节点 {node} 没有任何进度快照（state/checkpoints/{node}.jsonl）。\n"
+                f"  分阶段归档是硬要求——每个 Phase 结束应落一次快照，中断后才可续跑：\n"
+                f"    python state/state_utils.py checkpoint {node} --phase \"<Phase N>\" "
+                f"--done \"<已完成>\" --pending \"<待完成>\" --artifact <产物>\n"
+                f"  若该节点确实为单步动作，可加 --allow-no-checkpoint 并说明原因。"
+            )
     # 2.0.0 产物存在性校验：不允许空产物标完成。
     # 判定标准：节点声明的 artifact 路径下必须至少有一个非占位文件
     # （忽略 .gitkeep / readme.txt / 空目录），否则拒绝 node-finish。
@@ -194,6 +206,9 @@ def cmd_node_finish(args):
     for art in args.artifact or []:
         if art not in state["stages"][stage].setdefault("artifacts", []):
             state["stages"][stage]["artifacts"].append(art)
+    # 2.0.0：把产物自动登记进 artifacts-registry（不再依赖子 Agent 记得手动调用）。
+    # 这样 artifacts-registry 成为真实台账，orphan-scan 与后续审计才有据可查。
+    _auto_register_outputs(root, node, executor)
     save_state(root, state)
     for art in args.artifact or []:
         full = os.path.join(root, art)
@@ -264,6 +279,59 @@ def _count_node_outputs(root, node):
                     if _is_filled(full, rel):
                         total += 1
     return total
+
+
+def _auto_register_outputs(root, node, executor):
+    """node-finish 时自动把本节点产物登记进 artifacts-registry（幂等）。
+
+    这样"文件必有入库记录"不再依赖子 Agent 记得手动跑 register-artifact：
+    凡是落在节点 artifact 目录内的真实产出，完成节点时自动入账。
+    """
+    reg_path = os.path.join(root, "state", "reports", "artifacts-registry.json")
+    try:
+        reg = json.loads(open(reg_path, encoding="utf-8").read())
+    except (OSError, json.JSONDecodeError):
+        reg = {"schema_version": "artifacts-registry/1.0", "artifacts": []}
+    items = reg.setdefault("artifacts", [])
+    by_path = {a.get("path"): a for a in items}
+    paths = [p.strip() for p in NODES[node].get("artifact", "").split(",") if p.strip()]
+    added = 0
+    for rel_root in paths:
+        full_root = os.path.join(root, rel_root)
+        candidates = []
+        if os.path.isfile(full_root):
+            candidates.append((rel_root, full_root))
+        elif os.path.isdir(full_root):
+            for dp, dns, fns in os.walk(full_root):
+                if ".git" in dp.split(os.sep):
+                    dns[:] = []
+                    continue
+                for f in fns:
+                    full = os.path.join(dp, f)
+                    candidates.append((os.path.relpath(full, root).replace("\\", "/"), full))
+        for rel, full in candidates:
+            if not _is_filled(full, rel):
+                continue
+            digest = sha256_of(full)
+            prev = by_path.get(rel)
+            if prev and prev.get("sha256") == digest:
+                continue  # 内容未变，不重复登记
+            entry = {
+                "path": rel, "node": node, "kind": "auto",
+                "sha256": digest, "size": os.path.getsize(full), "is_dir": False,
+                "registered_by": executor, "registered_at": now_iso(),
+                "note": "node-finish 自动登记",
+            }
+            if prev:
+                entry["previous_sha256"] = prev.get("sha256")
+                items[:] = [a for a in items if a.get("path") != rel]
+            items.append(entry)
+            by_path[rel] = entry
+            added += 1
+    if added:
+        os.makedirs(os.path.dirname(reg_path), exist_ok=True)
+        save_json_atomic(reg_path, reg)
+        print(f"[state_utils] 已自动登记 {added} 个产物到 state/reports/artifacts-registry.json")
 
 
 def cmd_node_log(args):
