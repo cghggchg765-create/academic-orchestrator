@@ -741,3 +741,9 @@ path = "scripts/test_text_similarity.py"
 [[pytest]]
 id = "orphan-wire-test_uncited_assertion"
 path = "scripts/test_uncited_assertion.py"
+
+# ---- 2.0.0 新增：门禁/血缘/归档/入库的回归保护 ----
+[[pytest]]
+id = "v2-gates-lineage-archive"
+path = "tests/test_v2_gates.py"
+args = ["-q"]

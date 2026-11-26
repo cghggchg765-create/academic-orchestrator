@@ -274,6 +274,34 @@ def preprocess_pipeline(df, target_col=None):
 
 > 配套产物：`Data/processed/`（清洗后标准化数据）、`Data/feature/`（特征工程数据集）、`Data/test_result/`（模型验证/测试数据集）。运行代码只写 `Code/output/`（唯一输出口）。
 
+### 🔴 数据血缘台账（2.0.0 新增，D1 门禁硬要求）
+
+除 DataLog 外，必须产出 **`Data/data-lineage.json`**（结构见
+`shared/contracts/math_modeling/data_lineage.schema.json`），否则 D1 不放行。
+
+它回答三个问题，且每项都可机器交叉校验：
+
+| 问题 | 必须记录 | 校验器怎么验 |
+|---|---|---|
+| **处理了什么** | `raw.files[]` 的 `path/sha256/rows/cols/data_class` | 磁盘哈希与登记一致（raw 未被篡改）、行列数一致 |
+| **怎么处理** | 每级 `transform` 的 `script` + `script_sha256` + `params` + `random_seed` + `operations[]` | 脚本存在且哈希匹配；params/operations 非空 |
+| **产出什么** | 每级 `outputs[]` 的 `path/sha256/rows/cols`，以及 `diff.rows_delta` | 哈希/行列数一致；`diff.rows_delta` 与实测差值一致 |
+
+**链式要求**：下一级 `inputs` 的 `{path, sha256}` 必须匹配上一级 `outputs`，否则判"血缘断裂"。
+
+**raw 只读基线**：`Data/raw_lock.json` 由主 Agent 在 N0/N1（处理前）建立，dataprep 无权改写。
+任何人改动 `Data/raw` 都会被 D1 判定为篡改。
+
+**自检命令**（收工前必须 PASS）：
+```
+python scripts/validate_data_lineage.py Data/data-lineage.json --root .
+python scripts/raw_lock.py --root . --check      # 快速查 raw 是否被动过
+```
+
+**分阶段归档**（防中断重来）：每个 Phase 结束执行
+`python state/state_utils.py checkpoint N2 --phase "<Phase N>" --done ... --pending ... --artifact ...`，
+中断后用 `checkpoint-list N2 --latest` 读 `resume_hint` 续跑。
+
 ---
 
 ## Anti-Patterns

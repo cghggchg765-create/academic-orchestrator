@@ -561,6 +561,19 @@ def check_data_lineage_contract() -> None:
                         ("register-artifact", "产物入库登记")):
             if kw not in text:
                 error(f"agents/dataprep.md 未声明 {why}（{kw}）")
+    # D1 判据三处一致（gates-registry / mm-iteration-engine SKILL / reviewer）：
+    # 任一处缺"血缘"就会让执行方或审阅方不知道要做，必须 lint 拦住漂移。
+    d1_sources = [
+        (ROOT / "skills" / "mm-iteration-engine" / "SKILL.md", "mm-iteration-engine §6.3 门禁表"),
+        (ROOT / "agents" / "reviewer.md", "reviewer N2 审阅清单"),
+        (ROOT / "skills" / "mm-data-preprocessing" / "SKILL.md", "mm-data-preprocessing 产出物规范"),
+    ]
+    for path, label in d1_sources:
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if "血缘" not in text:
+            error(f"D1 判据漂移：{label} 未提及数据血缘（{path.relative_to(ROOT)}）")
     # 编排协议必须声明 G.1-G.4
     orch = ROOT / "skills" / "academic-orchestration" / "SKILL.md"
     if orch.exists():

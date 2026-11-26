@@ -345,7 +345,7 @@ python state/state_utils.py review-loop <Nx> --dir .
 | 门禁 | 时机 | 通过标准（摘要） | 落盘路径 | 阻断级别 |
 |---|---|---|---|---|
 | M1 | N1 后 | 审题完整性：问题覆盖/隐性约束≥3 条有推导/题型判定≥3 条依据/**各维度 ≥150 字** | node-review N1 PASS | 阻塞进 N2 |
-| D1 | N2 后 | CSV 可读 + 缺失报告 + 来源可追溯 + 数据量达标（行数≥指标列数×3） | node-review N2 PASS | 阻塞进 N3 |
+| D1 | N2 后 | CSV 可读 + 缺失报告 + 来源可追溯 + 数据量达标（行数≥指标列数×3）；**且数据血缘完整：`Data/data-lineage.json` 经 `scripts/validate_data_lineage.py` 校验 PASS（raw 哈希与 `Data/raw_lock.json` 一致、raw→processed→feature→test_result 链式连续、每级有变换脚本+参数+种子、diff.rows_delta 与实测一致）** | node-review N2 PASS（`--allow-missing-lineage` 仅离线特批） | 阻塞进 N3 |
 | P1 | N3 后 | 算法正确性论证无漏洞（公式完整/假设有依据/选择有对比） | node-review N3 PASS | 阻塞编码 |
 | P2 | N4 后 | 代码可运行 + 输出可追溯 + 代码-公式一致 | node-review N4 PASS | 阻塞进 N5 |
 | A1 | N4 后 | 代码反模式扫描 0 个 High 命中 | **round-score N4 达标（total≥pass）自动 PASS** | ⛔ 硬阻断 |
@@ -541,7 +541,15 @@ python state/state_utils.py dump [--dir .]
 python state/state_utils.py stage-set <key> <status> [--artifact p] [--decision d] [--dir .]
 python state/state_utils.py gate-set <GATE> <PASS|FAIL|BLOCKED> [--agent A] [--result R] [--dir .]
 python state/state_utils.py node-start <N4> [--goal G] [--dir .]
-python state/state_utils.py node-finish <N4> --agent coder --skills "mm-iteration-engine,mm-algorithm-dev,code-review" [--artifact p ...] [--dir .]   # 执行 Agent 与技能必填声明
+python state/state_utils.py node-finish <N4> --agent coder --skills "mm-iteration-engine,mm-algorithm-dev,code-review" [--artifact p ...] [--allow-empty-artifacts] [--dir .]   # 执行 Agent 与技能必填声明；空产物默认拒绝完成
+python state/state_utils.py checkpoint <Nx> --phase "<阶段名>" [--done D ...] [--pending P ...] [--artifact <路径> ...] [--note "<决策/阻塞>"] [--by <agent>] [--dir .]
+         # 🔴 子 Agent 分阶段归档：每个 Phase 结束落一次快照到 state/checkpoints/<Nx>.jsonl（append-only）
+python state/state_utils.py checkpoint-list <Nx> [--latest] [--dir .]
+         # 中断续跑：读最后一条快照的 resume_hint（从哪个 Phase 之后继续、已完成/待完成几项），不必从头重跑
+python state/state_utils.py register-artifact <Nx> --path <相对路径> --kind <dataset|figure|table|prose|code|report> [--note S] [--by <agent>] [--dir .]
+         # 🔴 产物入库登记：路径必须在本节点 artifact 目录内，否则拒绝（防乱放）；落 state/reports/artifacts-registry.json
+python state/state_utils.py orphan-scan [--apply] [--dir .]
+         # 孤儿文件扫描：找出不在任何节点产物目录、也未登记的散落文件；收尾与 N8 终审前各跑一次
 python state/state_utils.py node-review <N4> --agent <id> --result <PASS|FAIL|BLOCKED> --skills s1,s2 [--evidence <路径>] [--summary S] [--dir .]
 python state/state_utils.py round-start <N4|N5|N7|N8> [--goal G] [--branch B] [--git] [--dir .]
 python state/state_utils.py round-score <N4|N5|N7|N8> --round N --total 7.8 --dims '{"correctness":8.0,...}' [--judge A] [--git] [--dir .]
