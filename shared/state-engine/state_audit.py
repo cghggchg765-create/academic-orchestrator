@@ -760,6 +760,15 @@ def check_review_timeline(root):
     return []
 
 
+def _scan_orphans_for_audit(root):
+    """project-audit 用的轻量孤儿扫描（复用 orphan-scan 的判定，不落盘）。"""
+    try:
+        from state_progress import _scan_orphans
+        return _scan_orphans(root)
+    except (ImportError, AttributeError):
+        return []
+
+
 def cmd_project_audit(args):
     root = os.path.abspath(args.dir)
     report = {"project": root, "audited_at": now_iso()}
@@ -794,6 +803,9 @@ def cmd_project_audit(args):
     report["h_gate_consistency"] = check_h_gate_consistency(root)
     report["engine_legacy"] = check_engine_legacy(root)
     report["review_timeline"] = check_review_timeline(root)
+    # 2.0.0：孤儿文件扫描入审计（此前 orphan-scan 是独立命令、无人调用）。
+    # 找出既不在任何节点产物目录、也未登记入库的散落文件。
+    report["orphan_files"] = _scan_orphans_for_audit(root)
     issues = []
     if report["state_authenticity"]:
         issues.append("状态文件非标准（疑似绕过 CLI 手工创建）")
@@ -828,6 +840,11 @@ def cmd_project_audit(args):
     if report["review_timeline"]:
         issues.append("评审对象非最终产物（" +
                       ", ".join(m["latest_pdf"] for m in report["review_timeline"]) + " 晚于最后审阅，必须重评）")
+    if report["orphan_files"]:
+        issues.append(f"散落文件未入库（{len(report['orphan_files'])} 个）："
+                      + ", ".join(report["orphan_files"][:5])
+                      + ("…" if len(report["orphan_files"]) > 5 else "")
+                      + "（移入对应节点产物目录并登记，或确认属源码/配置后豁免）")
     report["summary"] = {"healthy": not issues, "issues": issues}
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

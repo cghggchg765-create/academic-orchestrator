@@ -221,10 +221,10 @@ def cmd_register_artifact(args):
                       "node": node, "total_registered": len(items)}, ensure_ascii=False, indent=2))
 
 
-def cmd_orphan_scan(args):
-    root = os.path.abspath(args.dir)
+def _scan_orphans(root):
+    """孤儿文件扫描（供 cmd_orphan_scan 与 project-audit 复用），返回相对路径列表。"""
     roots = _all_artifact_roots()
-    # 已登记产物（目录形态的登记展开为其子文件）
+    # 已登记产物
     registered = set()
     reg_path = os.path.join(root, ARTIFACT_REGISTRY)
     if os.path.exists(reg_path):
@@ -233,15 +233,11 @@ def cmd_orphan_scan(args):
                 registered.add(a.get("path", ""))
         except json.JSONDecodeError:
             pass
-    # 已纳入节点快照的文件（node-finish 的 artifact_hash 只记目录哈希，这里用产物根排除）
     orphans = []
     for dp, dns, fns in os.walk(root):
         rel_dir = os.path.relpath(dp, root)
         parts = [] if rel_dir == "." else rel_dir.split(os.sep)
-        if parts and parts[0] in IGNORE_TOP:
-            dns[:] = []
-            continue
-        if parts and parts[0] in SCAFFOLD_DIRS:
+        if parts and (parts[0] in IGNORE_TOP or parts[0] in SCAFFOLD_DIRS):
             dns[:] = []
             continue
         dns[:] = [d for d in dns if d not in IGNORE_TOP and d != ".git"]
@@ -256,6 +252,22 @@ def cmd_orphan_scan(args):
             if rel in registered:
                 continue
             orphans.append(rel)
+    return sorted(orphans)
+
+
+def cmd_orphan_scan(args):
+    root = os.path.abspath(args.dir)
+    roots = _all_artifact_roots()
+    # 已登记产物（目录形态的登记展开为其子文件）
+    registered = set()
+    reg_path = os.path.join(root, ARTIFACT_REGISTRY)
+    if os.path.exists(reg_path):
+        try:
+            for a in json.loads(open(reg_path, encoding="utf-8").read()).get("artifacts", []):
+                registered.add(a.get("path", ""))
+        except json.JSONDecodeError:
+            pass
+    orphans = _scan_orphans(root)
 
     report = {
         "scanned_at": now_iso(),
