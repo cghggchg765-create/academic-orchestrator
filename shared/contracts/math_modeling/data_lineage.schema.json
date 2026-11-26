@@ -160,6 +160,17 @@
           "description": "行数变化有 operations 解释（删行必须有理由）"
         }
       }
+    },
+
+    "environment_lock": {
+      "type": "object",
+      "description": "环境锁定（可复现性最小成本方案，对齐 NeurIPS 环境披露项）：记录依赖锁文件的哈希与运行平台。校验器要求文件存在且哈希匹配。",
+      "properties": {
+        "file": { "type": "string", "description": "依赖锁文件路径，如 Code/requirements.lock" },
+        "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "python": { "type": "string", "description": "如 3.11.9" },
+        "platform": { "type": "string", "description": "如 win32-x64 / linux-x86_64" }
+      }
     }
   }
 }

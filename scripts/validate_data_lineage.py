@@ -89,6 +89,30 @@ def _count_rows(path: Path) -> int | None:
         return None
 
 
+def verify_environment_lock(payload: dict, root: Path, f: Findings) -> None:
+    """环境锁定校验（可复现性最小成本方案）。
+
+    NeurIPS 等可复现性清单要求披露运行环境；这里不做容器化，只要求：
+    有 lock 文件 + 哈希匹配。缺失记 WARN（不阻断，但审计可见）。
+    """
+    env = payload.get("environment_lock")
+    if not isinstance(env, dict) or not env.get("file"):
+        f.check("env_lock.present", False,
+                "未记录 environment_lock（建议 pip freeze > Code/requirements.lock 后登记其哈希）",
+                severity="WARN", ok_detail="环境锁定已登记")
+        return
+    rel = env["file"]
+    full = root / rel
+    if not full.exists():
+        f.check("env_lock.exists", False, f"环境锁文件不存在: {rel}")
+        return
+    actual = _sha256(full)
+    declared = (env.get("sha256") or "").lower()
+    f.check("env_lock.sha256", actual == declared,
+            f"环境锁 {rel} 哈希不符：登记 {declared[:12]}… 实际 {actual[:12]}…（依赖已变）",
+            ok_detail=f"环境锁 {rel} 与登记一致")
+
+
 def verify_raw(payload: dict, root: Path, f: Findings) -> None:
     """raw 只读性：磁盘哈希必须等于登记哈希；登记的行列数需与实际一致。"""
     files = (payload.get("raw") or {}).get("files") or []
@@ -365,6 +389,7 @@ def main() -> int:
         verify_stages(payload, args.root, f)
         verify_invariants(payload, f)
         verify_thresholds(payload, args.root, f)
+        verify_environment_lock(payload, args.root, f)
 
     out = f.result()
     if args.json:
