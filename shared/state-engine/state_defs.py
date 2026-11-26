@@ -601,6 +601,73 @@ def mcp_search_evidence(root, node, round_no=None):
     return []
 
 
+DATA_LINEAGE_FILE = os.path.join("Data", "data-lineage.json")
+
+
+def require_data_lineage(root, node, allow_flag=False):
+    """N2 数据血缘强制校验（D1 门禁机器执行者）。
+
+    三件事必须可交叉检验：
+      1. 处理了什么 —— raw 文件 sha256 与登记一致（未被篡改）
+      2. 怎么处理   —— 每级 transform 脚本存在、哈希匹配、有参数与种子
+      3. 产出什么   —— 每级 outputs 哈希一致，且下一级 inputs 匹配上一级 outputs（链不断裂）
+
+    缺台账 / 校验不 PASS → 拒绝 D1 审阅落盘。allow_flag=True 为显式豁免（离线/人工特批）。
+    """
+    if node != "N2":
+        return
+    if allow_flag:
+        return
+    ledger = os.path.join(root, DATA_LINEAGE_FILE)
+    if not os.path.isfile(ledger):
+        sys.exit(
+            f"[state_utils] 🔴 N2 缺少数据血缘台账 {DATA_LINEAGE_FILE}，D1 无法判定"
+            f"「处理内容/过程/结果是否可交叉检验」。\n"
+            f"  请先产出血缘台账（结构见 shared/contracts/math_modeling/data_lineage.schema.json），"
+            f"并执行:\n"
+            f"    python scripts/validate_data_lineage.py {DATA_LINEAGE_FILE} --root .\n"
+            f"  或显式传 --allow-missing-lineage 豁免（仅离线/人工特批，须在交付说明中留痕）。"
+        )
+    # 定位校验器。三种运行形态都要覆盖：
+    #   1) 插件根内运行： state_defs 在 <plugin>/shared/state-engine/ → 上两级即插件根
+    #   2) 项目内副本运行：state_defs 被复制到 <project>/state/ → 项目内通常无 scripts，需回退
+    #   3) 显式指定：ACADEMIC_ORCHESTRATOR_ROOT 环境变量
+    _here = os.path.dirname(os.path.abspath(__file__))
+    _cands = []
+    env_root = os.environ.get("ACADEMIC_ORCHESTRATOR_ROOT")
+    if env_root:
+        _cands.append(os.path.join(env_root, "scripts", "validate_data_lineage.py"))
+    _cands.append(os.path.join(os.path.dirname(os.path.dirname(_here)), "scripts", "validate_data_lineage.py"))
+    _cands.append(os.path.join(_here, "..", "..", "scripts", "validate_data_lineage.py"))
+    _cands.append(os.path.join(root, "scripts", "validate_data_lineage.py"))
+    script = next((os.path.abspath(c) for c in _cands if os.path.isfile(c)), None)
+    if not script:
+        sys.exit(
+            "[state_utils] 数据血缘校验器缺失: scripts/validate_data_lineage.py\n"
+            "  项目内 state/ 副本找不到插件根。请在插件根目录运行，或设置环境变量\n"
+            "    ACADEMIC_ORCHESTRATOR_ROOT=<插件根目录>\n"
+            "  或传 --allow-missing-lineage 豁免（仅离线/人工特批）。"
+        )
+    try:
+        proc = subprocess.run([sys.executable, script, ledger, "--root", root, "--json"],
+                              capture_output=True, text=True, timeout=120)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        sys.exit(f"[state_utils] 血缘校验执行失败: {exc}")
+    try:
+        report = json.loads(proc.stdout or "{}")
+    except json.JSONDecodeError:
+        sys.exit(f"[state_utils] 血缘校验输出无法解析: {(proc.stdout or proc.stderr)[:300]}")
+    if report.get("status") == "PASS":
+        return
+    errs = report.get("errors") or [f"校验器退出码 {proc.returncode}"]
+    detail = "\n".join(f"    - {e}" for e in errs[:10])
+    sys.exit(
+        f"[state_utils] 🔴 N2 数据血缘校验未通过（D1 拒绝放行）：\n{detail}\n"
+        f"  修复方向：补齐缺失哈希/脚本记录、恢复 raw 原状、或让每级 inputs 与上一级 outputs 对齐。\n"
+        f"  或显式传 --allow-missing-lineage 豁免（仅离线/人工特批，须在交付说明中留痕）。"
+    )
+
+
 def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
     """核心节点 MCP 必调校验：该节点/该轮无外部检索留痕 → 拒绝（禁止纯内生输出、禁止跳过必调）。
 
@@ -619,4 +686,4 @@ def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
         f"  或显式传 --allow-missing-mcp 豁免（仅离线/人工特批，须在交付说明中留痕）。"
     )
 
-__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]
+__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "require_data_lineage", "DATA_LINEAGE_FILE", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]

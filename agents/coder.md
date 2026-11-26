@@ -286,7 +286,7 @@ Code/
 
 ### TDD 编码工作流
 
-参考 skill("test-driven-development")，执行 Red-Green-Refactor 循环：
+参考 superpowers 的 `test-driven-development`（运行时按需加载；本插件不自带），执行 Red-Green-Refactor 循环：
 
 #### RED — 写失败测试
 1. 为每个新功能先写一个最小测试
@@ -361,7 +361,7 @@ if (user) { if (user.isActive) { doWork(user); } }
 
 ### 调试流程
 
-遇到 bug 时，参考 skill("systematic-debugging") 和 skill("investigate")：
+遇到 bug 时，参考 `superpowers:systematic-debugging`（运行时按需；未装则按下方四阶段流程手动排查）：
 
 #### Phase 1: 根因调查
 1. **读错误信息** — 完整阅读堆栈，定位行号和文件
@@ -495,13 +495,13 @@ if (user) { if (user.isActive) { doWork(user); } }
 
 | 场景 | 加载 skill |
 |------|-----------|
-| 写新功能/代码 | skill("test-driven-development") |
-| 调试 bug | skill("systematic-debugging") |
-| 代码审查后修改 | skill("receiving-code-review") |
-| 前端页面开发 | skill("frontend-design") + skill("frontend-philosophy") |
+| 写新功能/代码 | 运行时按需：`superpowers:test-driven-development`（未装则按 Red-Green-Refactor 手动执行） |
+| 调试 bug | 运行时按需 `superpowers:systematic-debugging`（未装则按四阶段根因排查手动执行） |
+| 代码审查后修改 | 运行时按需 `superpowers:receiving-code-review`（未装则逐条核对 feedback 后修改） |
+| 前端页面开发 | 运行时按需加载 `claude-plugins-official:frontend-design`（若已装）；本插件不自带前端设计 skill |
 | LaTeX 论文修改 | skill("latex-guard") |
 | 学术写作 | skill("academic-research-skills:academic-paper") |
-| 执行计划 | skill("subagent-driven-development") |
+| 执行计划 | 本插件用 `academic-orchestration` 的派发协议（子 Agent 不能再派子 Agent，故不使用该 skill） |
 | 代码质量检查 | skill("code-review") 了解审查标准 |
 | 数学建模算法开发 | skill("mm-algorithm-dev")（竞赛模式核心） |
 | 数学建模数据预处理 | skill("mm-data-preprocessing") |
@@ -621,7 +621,7 @@ if (user) { if (user.isActive) { doWork(user); } }
 | 修改规则文件（AGENTS.md / rules/*.md） | 强制 [ESCALATE] P0 审批 |
 | 需要安装全局包 | [ESCALATE] 确认后再执行 |
 | 代码涉及 SQL 操作 | 必须使用参数化查询，ORM 优先 |
-| 被审查/review 后修改 | 先加载 skill("receiving-code-review") 再修改 |
+| 被审查/review 后修改 | 逐条核对 review feedback（每条要么改、要么写明不采纳理由）后再修改 |
 | 跨项目操作 | 确认当前工作目录正确，避免改错项目 |
 | 涉及 LaTeX 文件 | 先加载 skill("latex-guard") 获取规范 |
 

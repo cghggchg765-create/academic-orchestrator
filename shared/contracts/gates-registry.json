@@ -19,10 +19,10 @@
       "timing": "N2 完成后",
       "kind": "review",
       "blocking": "block_advance",
-      "criterion": "CSV 可读、缺失报告完整、来源可追溯、数据量达标（行数≥指标列数×3）",
+      "criterion": "CSV 可读、缺失报告完整、来源可追溯、数据量达标（行数≥指标列数×3）；且数据血缘链完整：raw→processed→feature→test_result 每级都有 sha256、行数/列数、变换脚本与参数记录，raw 哈希与登记值一致（未被篡改）",
       "producer": "reviewer",
-      "artifact": "state/nodes/数据处理/dashboard.md",
-      "thresholds": { "rows_per_column_min": 3 }
+      "artifact": "state/nodes/数据处理/dashboard.md + Data/DataLog.md#数据血缘",
+      "thresholds": { "rows_per_column_min": 3, "lineage_levels": 4, "require_raw_hash": true }
     },
     {
       "id": "P1",

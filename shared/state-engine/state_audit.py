@@ -101,6 +101,27 @@ def cmd_cascade_invalidate(args):
                 resets.append(down)
     if args.apply:
         invalidations = state["meta"].setdefault("cascade_invalidations", [])
+        # 2.0.0：变更节点本身也必须重验（否则"数据改了但 N2 仍 completed、D1 仍 PASS"）。
+        # 本节点状态回 pending，其 REVIEW_GATE 门禁一并重置——产物都变了，原审阅结论不再有效。
+        self_resets = []
+        for item in changed:
+            nid = item["node"]
+            if state["nodes"][nid].get("status") == "pending":
+                continue
+            state["nodes"][nid]["status"] = "pending"
+            state["nodes"][nid]["goal"] = ""
+            stage = NODES[nid]["stage"]
+            if stage in state.get("stages", {}):
+                state["stages"][stage]["status"] = "pending"
+                state["stages"][stage]["completed_at"] = None
+            gate_id = REVIEW_GATE.get(nid)
+            if gate_id and gate_id in state.get("gates", {}):
+                state["gates"][gate_id]["status"] = "pending"
+                state["gates"][gate_id]["result"] = f"自身产物变更，门禁需重验: {now_iso()}"
+            self_resets.append(nid)
+            invalidations.append({"at": now_iso(), "upstream_changed": nid, "reset": nid,
+                                  "reason": "本节点产物变更，自身状态与门禁必须重验"})
+            update_homepage_meta(node_homepage(root, nid), "pending")
         for down in resets:
             if state["nodes"][down].get("status") != "pending":
                 state["nodes"][down]["status"] = "pending"
@@ -118,8 +139,12 @@ def cmd_cascade_invalidate(args):
             update_homepage_meta(node_homepage(root, down), "pending")
         save_state(root, state)
         refresh_dashboard(root)
-    print(json.dumps({"preview": not args.apply, "changed_artifacts": changed, "downstream_reset": resets,
-                      "hint": "重置后需重新派发下游执行 Agent 同步更新产物（论文/图表/调优）并重新审阅" if resets else "无需重置"},
+    resets_out = locals().get("self_resets", []) + resets
+    print(json.dumps({"preview": not args.apply, "changed_artifacts": changed,
+                      "self_reset": locals().get("self_resets", []),
+                      "downstream_reset": resets,
+                      "hint": ("变更节点自身已重置，需重验其门禁；下游需重新派发执行 Agent 同步更新产物并重新审阅"
+                               if (resets or locals().get("self_resets")) else "无需重置")},
                      ensure_ascii=False, indent=2))
 
 

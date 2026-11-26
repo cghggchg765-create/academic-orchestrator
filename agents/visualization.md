@@ -98,7 +98,7 @@ maxTurns: 50
 | seaborn | 统计图表美观 | PDF/PNG |
 | plotly | 交互式图表（仅用于HTML附件） | HTML |
 | graphviz/diagram | 算法流程图 | PDF/PNG |
-| drawio-skill | 架构图/流程图/示意图（`skill("drawio-skill")` 加载后产出矢量图） | PDF/SVG/PNG |
+| drawio（可选） | 架构图/流程图/示意图（需本机已装 drawio-skill：`C:/Users/<user>/.zcode/skills/drawio-skill`；未装则改用 TikZ 或 matplotlib 示意图） | PDF/SVG/PNG |
 
 #### 通用硬性规范（分辨率/格式/字体/编号——两模式共用，仅此处书写一次）
 | 规范项 | 要求 |

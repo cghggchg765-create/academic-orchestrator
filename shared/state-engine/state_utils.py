@@ -66,6 +66,7 @@ from state_rounds import *  # noqa: F401,F403,E402
 from state_search import *  # noqa: F401,F403,E402
 from state_scopes import *  # noqa: F401,F403,E402
 from state_skills import *  # noqa: F401,F403,E402
+from state_progress import *  # noqa: F401,F403,E402
 
 def main():
     parser = argparse.ArgumentParser(description="状态统一节点命令行助手（schema 2.0）")
@@ -134,6 +135,8 @@ def main():
                    default="REVIEW", help="scope 审阅阶段")
     p.add_argument("--allow-missing-mcp", action="store_true",
                    help="核心节点（N1/N3/N4/N5/N7）PASS 审阅豁免 MCP 检索留痕校验（仅离线/人工特批，须留痕说明）")
+    p.add_argument("--allow-missing-lineage", action="store_true",
+                   help="N2 PASS 审阅豁免数据血缘校验（仅离线/人工特批，须留痕说明）")
     p.add_argument("--dir", default=".")
     p.set_defaults(func=cmd_node_review)
 
@@ -308,6 +311,37 @@ def main():
     p.add_argument("--by", default="", help="执行者（默认本节点 registry executor）")
     p.add_argument("--dir", default=".")
     p.set_defaults(func=cmd_node_log)
+
+    p = sub.add_parser("checkpoint", help="子 Agent 分阶段归档：把当前进度快照落盘（中断可续跑，不必重来）")
+    p.add_argument("node", choices=list(NODES))
+    p.add_argument("--phase", required=True, help="阶段标识（如 Phase 0 数据探查 / Phase 2 清洗）")
+    p.add_argument("--done", action="append", default=[], help="已完成项（可多次传）")
+    p.add_argument("--pending", action="append", default=[], help="待完成项（可多次传）")
+    p.add_argument("--artifact", action="append", default=[], help="本阶段已产出的文件路径（可多次传，自动算 sha256）")
+    p.add_argument("--note", default="", help="备注（决策/阻塞/下一步）")
+    p.add_argument("--by", default="", help="执行者（默认本节点 registry executor）")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_checkpoint)
+
+    p = sub.add_parser("checkpoint-list", help="列出某节点的全部进度快照（续跑时读最后一条恢复现场）")
+    p.add_argument("node", choices=list(NODES))
+    p.add_argument("--latest", action="store_true", help="只输出最近一条")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_checkpoint_list)
+
+    p = sub.add_parser("register-artifact", help="登记产物入库记录（文件必须落在节点产物目录内，否则拒绝）")
+    p.add_argument("node", choices=list(NODES))
+    p.add_argument("--path", required=True, help="产物路径（相对项目根）")
+    p.add_argument("--kind", default="", help="产物类型（dataset/figure/table/prose/code/report）")
+    p.add_argument("--note", default="", help="说明")
+    p.add_argument("--by", default="", help="登记者（默认本节点 registry executor）")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_register_artifact)
+
+    p = sub.add_parser("orphan-scan", help="孤儿文件扫描：找出落在节点产物目录之外、未被登记的文件")
+    p.add_argument("--apply", action="store_true", help="把扫描结果写入 state/reports/orphan-files.json")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_orphan_scan)
 
     p = sub.add_parser("todo", help="项目任务清单动态更新（add 新增 / done 标记完成 / list 列出 / plan 按状态自动规划）")
     ts = p.add_subparsers(dest="action", required=True)

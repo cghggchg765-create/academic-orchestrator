@@ -783,6 +783,38 @@ def cmd_init(args):
     print(f"[state_utils] init 完成: {root}")
     print("[state_utils] 已预建: decision_log / dashboard / registry / search_sources / cases / 9 份节点首页")
     print("[state_utils] 脚本已复制到 state/state_utils.py（项目内统一用: python state/state_utils.py <命令>）")
+    # 2.0.0：若 Data/raw 已有数据，立即建立只读锁定基线（此时尚未经过任何处理，
+    # 是唯一可信的"处理前"时点；由此封堵 dataprep 先改数据再登记血缘的漏洞）。
+    _maybe_lock_raw(root)
+
+
+def _maybe_lock_raw(root):
+    """若 Data/raw 下有数据文件且尚无锁定基线，调用 raw_lock.py 建立基线。"""
+    raw_dir = os.path.join(root, "Data", "raw")
+    lock_file = os.path.join(root, "Data", "raw_lock.json")
+    if not os.path.isdir(raw_dir) or os.path.exists(lock_file):
+        return
+    data_files = [f for f in os.listdir(raw_dir)
+                  if os.path.isfile(os.path.join(raw_dir, f))
+                  and f not in ("readme.txt", ".gitkeep", ".gitignore")]
+    if not data_files:
+        print("[state_utils] Data/raw 暂无数据文件，跳过 raw 锁定（放入原始数据后请运行 "
+              "python scripts/raw_lock.py --root <项目>）")
+        return
+    here = os.path.dirname(os.path.abspath(__file__))
+    script = os.path.join(os.path.dirname(os.path.dirname(here)), "scripts", "raw_lock.py")
+    if not os.path.isfile(script):
+        print(f"[state_utils] ⚠ 未找到 scripts/raw_lock.py，跳过 raw 锁定（请手动建立 {lock_file}）")
+        return
+    try:
+        proc = subprocess.run([sys.executable, script, "--root", root],
+                              capture_output=True, text=True, timeout=120)
+        if proc.returncode == 0:
+            print(f"[state_utils] 已建立 raw 只读锁定基线（{len(data_files)} 个文件）→ Data/raw_lock.json")
+        else:
+            print(f"[state_utils] ⚠ raw 锁定失败: {(proc.stderr or proc.stdout)[:200]}")
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        print(f"[state_utils] ⚠ raw 锁定执行异常: {exc}")
 
 
 def cmd_dump(args):

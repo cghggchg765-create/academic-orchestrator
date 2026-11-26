@@ -91,10 +91,29 @@ class MCPGatesTest(unittest.TestCase):
                            "--allow-missing-mcp", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 
-    def test_n2_node_review_pass_not_gated(self):
+    def test_n2_node_review_pass_not_gated_by_mcp(self):
+        """N2 不受 MCP 检索留痕门禁约束（MCP 只强制 N1/N3/N4/N5/N7）。"""
         r = self.run_state("node-review", "N2", "--agent", "reviewer", "--result", "PASS",
                            "--skills", "academic-orchestrator:mm-data-preprocessing", "--evidence", "Data/DataLog.md",
-                           "--dir", str(self.project))
+                           "--allow-missing-lineage", "--dir", str(self.project))
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_n2_node_review_requires_data_lineage(self):
+        """2.0.0：N2 的 D1 门禁强制数据血缘台账（处理内容/过程/结果可交叉检验）。
+
+        无 Data/data-lineage.json → 拒绝 D1 落盘，并给出修复指引。
+        """
+        r = self.run_state("node-review", "N2", "--agent", "reviewer", "--result", "PASS",
+                           "--skills", "academic-orchestrator:mm-data-preprocessing", "--evidence", "Data/DataLog.md",
+                           "--dir", str(self.project), check=False)
+        self.assertNotEqual(r.returncode, 0, "缺少血缘台账时应拒绝 D1 放行")
+        self.assertIn("数据血缘", r.stderr, f"应提示血缘缺失，实际: {r.stderr[:200]}")
+
+    def test_n2_node_review_lineage_exemption(self):
+        """显式豁免 --allow-missing-lineage 时可通过（仅离线/人工特批场景）。"""
+        r = self.run_state("node-review", "N2", "--agent", "reviewer", "--result", "PASS",
+                           "--skills", "academic-orchestrator:mm-data-preprocessing", "--evidence", "Data/DataLog.md",
+                           "--allow-missing-lineage", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 
     # ---- round-score 每轮检索留痕门禁 ----

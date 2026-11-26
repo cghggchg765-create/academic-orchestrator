@@ -211,12 +211,12 @@ python shared/state-engine/orchestrator_runtime.py --plan-iteration N4 --dir <�
 1. **插件方式（推荐，一次加载全部组件）**：本仓库即标准插件包——`.zcode-plugin/plugin.json`（另附 `.claude-plugin/`、`.codex-plugin/` 兼容清单）声明全部组件：`skills`（23 个 Skill，含 11 个 mm-* 建模专项 + 编排协议 + 图表对标 + 去AI化 + LaTeX 质检 + 路由层）、`agents`（21 个 Agent 定义：8 建模节点执行 + 3 专用审阅（含图表对标）+ 学术支撑）、`commands`（7 个：`/mm` 主线 6 个 + `/academic-update` 上游更新检查）；项目文档（README、docs/、CHANGELOG、CONTRIBUTING、SECURITY）随包携带。
 
    - **安装**：ZCode **Settings → Plugin Management → Discover** → 添加本地目录（本仓库路径）或 Git URL → 安装并启用；
-   - **本地插件市场（推荐本仓库）**：本仓库根已内置 `marketplace.json`（官方本地市场清单）。在 **设置 → 插件 → 右上角 创建 → 添加插件市场**，填本仓库目录 `F:\deskop\数学建模skills`（或拖入文件夹）→ 校验通过后插件出现在「个人」分段 → 安装并启用 `math-modeling-agent-system`；
+   - **本地插件市场（推荐本仓库）**：本仓库根已内置 `marketplace.json`（官方本地市场清单）。在 **设置 → 插件 → 右上角 创建 → 添加插件市场**，填本仓库目录（如 `F:\deskop\mm`）或拖入文件夹 → 校验通过后插件出现在「个人」分段 → 安装并启用 `academic-orchestrator`；
    - **插件自带 MCP**：插件根 `.mcp.json` 声明四类 MCP（paper-mcp / context7 / github / tavily-mcp / tokenhub-tools 回退），启用插件后显示在 **设置 → MCP 的「Plugin MCP 服务器」分组**，随插件启停自动加载。本机 `.mcp.json` 已写入你的真实密钥与路径（已被 `.gitignore` 保护，不会提交）；可分发的占位模板见 `.mcp.json.template`（换机时复制为 `.mcp.json` 并替换 `${...}` 占位）。用户级同名 MCP 以你自己的配置为准；
    - **更新**：仓库推送新版本后，在 Plugin Management 对插件执行更新（Git URL 方式自动对齐；本地目录市场方式重新指向即可）；
    - **跨工具**：Claude/Codex 通过各自插件市场安装同一仓库（清单已兼容）。
 
-   > **本地 marketplace 注册（换机器可复现）**：若用本地目录方式且想直接出现在"已安装"列表，需注册 marketplace——在 `~/.zcode/cli/plugins/known_marketplaces.json` 的 `marketplaces` 追加 `{"id": "math-modeling", "source": {"source": "directory", "path": "<插件缓存目录>"}}`，并在该目录放 `marketplace.json`：`{"name": "math-modeling", "plugins": [{"name": "math-modeling-agent-system", "source": {"source": "directory", "path": "<插件目录>"}, "version": "1.7.0", "icon": "📐"}]}`；重启会话后 Installed 页可见并可开关。推送到 GitHub 后建议改用 Git URL marketplace（`https://github.com/cghggchg765-create/math-modeling-skills`），无需本地注册。
+   > **本地 marketplace 注册（换机器可复现）**：若用本地目录方式且想直接出现在"已安装"列表，需注册 marketplace——在 `~/.zcode/cli/plugins/known_marketplaces.json` 的 `marketplaces` 追加 `{"id": "academic-orchestrator", "source": {"source": "directory", "path": "<插件缓存目录>"}}`，并在该目录放 `marketplace.json`：`{"name": "academic-orchestrator", "plugins": [{"name": "academic-orchestrator", "source": {"source": "directory", "path": "<插件目录>"}, "version": "2.0.0", "icon": "🎓"}]}`；重启会话后 Installed 页可见并可开关。推送到 GitHub 后建议改用 Git URL marketplace，无需本地注册。
 
 2. **用户级同步（个人使用，立即生效）**：将 `skills/` 与 `agents/` 同步到工具的技能/子代理目录（`~/.zcode/skills` 优先于 `~/.agents/skills`，同名 skill 用户级先加载）：
 

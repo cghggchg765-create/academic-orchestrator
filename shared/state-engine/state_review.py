@@ -18,6 +18,9 @@ def cmd_node_review(args):
     if args.result == "PASS":
         require_mcp_search_evidence(root, node, round_no=None,
                                     allow_flag=getattr(args, "allow_missing_mcp", False))
+        # N2 数据血缘强制（2.0.0）：D1 放行前必须能交叉检验处理内容/过程/结果
+        require_data_lineage(root, node,
+                             allow_flag=getattr(args, "allow_missing_lineage", False))
     skills = ",".join(s.strip() for s in args.skills.split(","))
     summary = args.summary or ""
     evidence = args.evidence or "-"

@@ -543,6 +543,59 @@ python state/state_utils.py node-log <Nx> --step "[纠正] <类型> <要求摘�
 | 投递 `resumed_background` | 说明原 agent 已停，已带消息重启；需重新校验其 read_skills 与产物 |
 | 平台不支持后台 | 退化为串行派发，在 `meta.platform_mode` 如实记录，**不得谎报并行** |
 
+### G. 分阶段归档与入库记录（🔴 所有子 Agent 通用强制）
+
+长任务中断后必须能续跑，且产物必须可追溯。**派发时把本节要求写进子 Agent prompt**。
+
+#### G.1 分阶段归档（防中断重来）
+
+每个执行/审阅 Agent 在**每个 Phase 结束时**必须落一次进度快照：
+
+```
+python state/state_utils.py checkpoint <Nx> --phase "<Phase N 名称>" \
+  --done "<已完成项>" [--done ...] --pending "<待完成项>" \
+  --artifact <本阶段产物路径> [--artifact ...] --note "<决策/阻塞/下一步>"
+```
+
+- 落盘：`state/checkpoints/<Nx>.jsonl`（append-only）+ 可读摘要 `state/checkpoints/<Nx>.md`
+- 中断续跑：`checkpoint-list <Nx> --latest` 读回 `resume_hint`（"从哪个 Phase 之后续跑、已完成几项、待完成几项"）
+- **铁律**：续跑时不得重做快照里已标 `done` 的项；`artifacts` 里 `state:"missing"` 的路径说明是半成品，必须先补
+
+#### G.2 产物入库登记（文件不能乱放）
+
+每个产物文件写完后：
+
+```
+python state/state_utils.py register-artifact <Nx> --path <相对项目根路径> --kind <dataset|figure|table|prose|code|report> --note "<说明>"
+```
+
+- **落位强制**：路径必须位于该节点 `artifact` 声明目录之下，否则命令拒绝（禁止乱放）
+- 登记落 `state/reports/artifacts-registry.json`，记录 `path/sha256/size/registered_by/registered_at`；同路径重登记会保留 `previous_sha256`
+- 派发时告知子 Agent：**先确认落点合规再写文件**，不要先写后挪
+
+#### G.3 孤儿文件扫描（收尾必做）
+
+```
+python state/state_utils.py orphan-scan --apply
+```
+
+- 找出「不在任何节点产物目录下、也未登记」的文件，落 `state/reports/orphan-files.json`
+- 编排方在节点收尾与 N8 终审前各跑一次；`orphan_count` 非 0 时逐条判定：移入对应产物目录并登记，或确认属源码/配置后豁免
+- 脚手架预建目录（`DefenseMaterial`/`Literature`/`LogRecord` 等）与版本控制文件已自动排除，不产生噪音
+
+#### G.4 数据处理节点（N2）的额外强制
+
+N2 除 G.1–G.3 外还须：
+
+```
+python scripts/validate_data_lineage.py Data/data-lineage.json --root .
+```
+
+必须 `PASS` 才能请求 D1 审阅。该项校验三件事：
+1. **处理了什么** —— `raw.files` 的 sha256/rows/cols 与磁盘一致（raw 未被篡改）
+2. **怎么处理** —— 每级 `transform.script` 存在且哈希匹配、有 params/random_seed
+3. **产出什么** —— 每级 `outputs` 的 sha256/rows/cols 与磁盘一致，且下一级 `inputs` 能匹配上一级 `outputs`（链不断裂）
+
 
 ## 状态统一节点协议（数学建模流程专用）
 

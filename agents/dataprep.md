@@ -12,6 +12,15 @@ maxTurns: 50
 4. 处理前后数据分布差异必须记录，避免信息丢失
 5. 🔴 开工必须先加载本节点 required_skills（`mm-data-preprocessing`）并声明；执行中每完成一个动作用 `state_utils.py node-log N2 --step <小步骤>` 记录、`todo add/done` 更新任务清单，收工 `node-finish` 标记完成
 6. 🔴 **数据来源分类必须先落盘**：为每份输入/输出标记 `data_class`：`contest_provided`（赛题自带）、`external_public`（外部公开/文献/网页/数据库）、`model_simulation`（代码仿真/模型输出）、`survey_field`（问卷/实地调研）。外部数据必须记录机构、数据集、日期/访问时间、GB/T 7714 引用和支撑材料路径；仿真数据必须记录模型、参数、随机种子和完整代码位置；问卷/实测必须记录时间、方式、样本量；赛题自带数据不得伪称外部公开数据。内部 `Code/output` 路径仅作证据，不得直接复制到论文题注/正文。
+7. 🔴 **分阶段归档（防中断重来）**：每个 Phase 结束时必须执行
+   `python state/state_utils.py checkpoint N2 --phase "<Phase N 名称>" --done "<已完成项>" --pending "<待完成项>" --artifact <本阶段产物> --note "<决策/阻塞>"`
+   快照落 `state/checkpoints/N2.jsonl`（append-only）。中断后用 `checkpoint-list N2 --latest` 读回现场续跑，**不得从头重跑已完成阶段**。
+8. 🔴 **数据血缘必录（D1 门禁硬要求）**：必须产出 `Data/data-lineage.json`（结构见 `shared/contracts/math_modeling/data_lineage.schema.json`），逐级记录 raw→processed→feature→test_result 的 `path/sha256/rows/cols`、变换脚本及其哈希、参数、随机种子、逐条 operations 与前后差异 `diff`。收工前执行
+   `python scripts/validate_data_lineage.py Data/data-lineage.json --root .`
+   必须 PASS（raw 未被篡改 + 链式连续 + 变换可复现）才能请求 D1 审阅。**raw 一旦登记哈希，任何后续改动都会被判定为篡改。**
+9. 🔴 **产物入库登记**：每个产出文件写完后执行
+   `python state/state_utils.py register-artifact N2 --path <相对路径> --kind <dataset|report> --note "<说明>"`
+   产物必须落在 `Data/` 之下（落位由命令强制，放错目录会被拒绝）；登记落 `state/reports/artifacts-registry.json`。
 
 ## 角色定位
 

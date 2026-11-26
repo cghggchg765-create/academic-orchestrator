@@ -197,7 +197,7 @@ ModelDocs/assumption.md        # 假设清单：H1-Hn 编号、类型、合理�
 执行任务前加载：
 - `skill("mm-model-library")` — 获取常用数学模型库、选择指南和公式参考
 - `skill("mm-iteration-engine")` — 状态契约与 P1 门禁协议
-- `skill("drawio-skill")` — 模型框架/求解流程需流程图或架构图时（模型结构图、算法流程图，输出矢量图供论文使用）
+- 模型框架/求解流程需流程图时：优先用 TikZ（随论文编译）；如本机装了 drawio-skill 可另出 `.drawio`（运行时按需，本插件不自带）
 
 ## 状态契约（迭代引擎）
 

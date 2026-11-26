@@ -525,6 +525,77 @@ def check_benchmark_contract() -> None:
         error("B1 门禁的 producer 必须为 mm-figure-table-benchmarker")
 
 
+def check_data_lineage_contract() -> None:
+    """数据处理交叉检验契约（2.0.0）：
+    ① 血缘 schema 必须存在；
+    ② 血缘校验器必须存在且可导入；
+    ③ D1 门禁必须声明血缘要求（否则 D1 退回"只看 CSV 可读"）；
+    ④ dataprep agent 必须声明血缘与分阶段归档要求（否则执行方不知道要做）；
+    ⑤ 编排协议必须声明 G.1-G.4（否则派发时不带要求）。
+    """
+    schema = ROOT / "shared" / "contracts" / "math_modeling" / "data_lineage.schema.json"
+    if not schema.exists():
+        error("数据血缘 schema 缺失: shared/contracts/math_modeling/data_lineage.schema.json")
+    validator = ROOT / "scripts" / "validate_data_lineage.py"
+    if not validator.exists():
+        error("数据血缘校验器缺失: scripts/validate_data_lineage.py")
+    # D1 必须含血缘要求
+    greg = ROOT / "shared" / "contracts" / "gates-registry.json"
+    if greg.exists():
+        gates = json.loads(greg.read_text(encoding="utf-8")).get("gates", [])
+        d1 = [g for g in gates if g.get("id") == "D1"]
+        if not d1:
+            error("D1 门禁未登记")
+        else:
+            crit = d1[0].get("criterion", "")
+            if "血缘" not in crit:
+                error("D1 门禁未声明数据血缘要求（处理过程无法交叉检验）")
+            th = d1[0].get("thresholds") or {}
+            if not th.get("require_raw_hash"):
+                error("D1 门禁 thresholds 缺 require_raw_hash（raw 只读性未强制）")
+    # dataprep 必须声明血缘 + 归档
+    dp = ROOT / "agents" / "dataprep.md"
+    if dp.exists():
+        text = dp.read_text(encoding="utf-8", errors="ignore")
+        for kw, why in (("validate_data_lineage", "血缘校验"), ("checkpoint", "分阶段归档"),
+                        ("register-artifact", "产物入库登记")):
+            if kw not in text:
+                error(f"agents/dataprep.md 未声明 {why}（{kw}）")
+    # 编排协议必须声明 G.1-G.4
+    orch = ROOT / "skills" / "academic-orchestration" / "SKILL.md"
+    if orch.exists():
+        text = orch.read_text(encoding="utf-8", errors="ignore")
+        for anchor in ("### G. 分阶段归档与入库记录", "checkpoint", "register-artifact", "orphan-scan"):
+            if anchor not in text:
+                error(f"academic-orchestration 未声明分阶段归档/入库要求: 缺 {anchor}")
+
+
+DELETED_THIRD_PARTY_SKILLS = (
+    "xlsx", "frontend-design", "theme-factory", "test-driven-development",
+    "systematic-debugging", "receiving-code-review", "subagent-driven-development",
+    "drawio-skill", "make-pdf", "investigate",
+)
+
+
+def check_no_deleted_skill_loads() -> None:
+    """禁止对已删除的第三方 skill 写 skill() 加载语句（2.0.0 去重后防回归）。
+
+    这些 skill 已在 2.0.0 物理删除，改由 mm-skill-router 运行时发现。
+    文档里若仍写 skill("xlsx") 之类，运行时会加载失败。
+    允许"提到名字"（如说明该能力由外部插件提供），但不允许 skill("<name>") 的加载调用。
+    """
+    targets = list((ROOT / "agents").glob("*.md")) + \
+              list((ROOT / "skills").glob("*/SKILL.md")) + \
+              list((ROOT / "commands").glob("*.md"))
+    for path in targets:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for name in DELETED_THIRD_PARTY_SKILLS:
+            for pat in (f'skill("{name}")', f"skill('{name}')"):
+                if pat in text:
+                    error(f"已删除 skill 的加载语句残留: {path.relative_to(ROOT)} 含 {pat}"
+                          f"（应改为运行时按需路由或指向外部插件）")
+
+
 def main() -> int:
     scan_markdown()
     check_registry()
@@ -542,6 +613,8 @@ def main() -> int:
     check_professional_skill_contract()
     check_gates_registry()
     check_benchmark_contract()
+    check_data_lineage_contract()
+    check_no_deleted_skill_loads()
     check_user_level_sync()
     if ERRORS:
         print("契约检查失败:")

@@ -247,7 +247,7 @@ maxTurns: 50
    ```
 3. 迭代轮次评分落盘由 orchestrator 执行：`python state/state_utils.py round-score N7 --round <n> --total <综合分> --dims '{...}' --judge reviewer --git` → `round-decide`（阈值见 termination.paper）。
 4. N8 终审：核对 `SubmissionPackage/参赛提交清单.md` 并落 A3 终扫结论。
-5. 电子版制作：提交材料需 PDF 时加载 `skill("make-pdf")` 生成最终电子版（符合官方 ≤20MB、与纸质版一致要求）并在提交清单中登记。
+5. 电子版制作：提交材料需 PDF 时用 LaTeX 直接产出（`latex_compile_check.py` / xelatex）或 pandoc 便携路径；本插件不自带 make-pdf。要求符合官方 ≤20MB、与纸质版一致，并在提交清单中登记。
 
 ### checkpoint 标准
 
@@ -271,7 +271,7 @@ maxTurns: 50
    | 节点 | 必读 Skill | 审阅依据 |
    |------|-----------|---------|
    | N1 选题拆解 | mm-problem-analysis + mm-self-review | 目标/约束/数据清单完整性、题型判定 ≥3 条依据、重述无照抄 |
-   | N2 数据处理 | mm-data-preprocessing | 缺失率分档决策、异常值策略有依据、可复现（种子/版本）、处理前后分布对比 |
+   | N2 数据处理 | mm-data-preprocessing + figure-table-benchmark（表格列名对标） | 缺失率分档决策、异常值策略有依据、可复现（种子/版本）、处理前后分布对比；**🔴 数据血缘（D1 硬要求）：`Data/data-lineage.json` 存在且 `validate_data_lineage.py` 校验 PASS——raw 哈希与 `Data/raw_lock.json` 锁定基线一致（未被篡改，含 rows/cols 与磁盘一致）、raw→processed→feature→test_result 每级 inputs 匹配上一级 outputs（链不断裂）、每级 transform 有脚本+script_sha256+params+random_seed、operations 解释了行数变化且 diff.rows_delta 与实测一致** |
    | N3 建模 | mm-model-library | 公式完整、假设有依据、选择有对比（≥2 模型）、符号统一 |
 3. **审阅**：按该 Skill 的检查清单逐项核对，输出 PASS/FAIL + 问题清单（每条含位置+修改建议）。
 4. **落盘**：

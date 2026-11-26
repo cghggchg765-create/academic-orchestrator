@@ -215,7 +215,7 @@ maxTurns: 50
 |------|-----------|
 | 深度学术研究 | skill("academic-research-skills:deep-research") |
 | 技术问题搜索 | skill("problem-solving") |
-| 代码模式搜索 | skill("investigate") |
+| 代码模式搜索 | GitHub MCP / gh_grep（本插件不自带 investigate skill） |
 
 ## 深度研究指南
 

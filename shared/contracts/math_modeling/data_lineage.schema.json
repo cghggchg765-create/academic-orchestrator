@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "academic-orchestrator/data-lineage.schema.json",
+  "title": "Data Lineage Ledger (raw → processed → feature → test_result)",
+  "description": "数据处理血缘台账。回答三件事：处理了什么（输入）、怎么处理（过程）、产出什么（结果），且每一环都能交叉校验。D1 门禁依据。",
+  "type": "object",
+  "required": ["schema_version", "project_id", "generated_at", "raw", "stages", "invariants"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "data-lineage/1.0" },
+    "project_id": { "type": "string" },
+    "generated_at": { "type": "string" },
+
+    "raw": {
+      "type": "object",
+      "description": "原始数据登记。raw 必须只读：哈希在此登记，任何后续变更都视为篡改。",
+      "required": ["files"],
+      "properties": {
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256", "rows", "cols"],
+            "properties": {
+              "path": { "type": "string", "description": "相对项目根的 Data/raw/... 路径" },
+              "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+              "rows": { "type": "integer", "minimum": 0 },
+              "cols": { "type": "integer", "minimum": 0 },
+              "columns": { "type": "array", "items": { "type": "string" } },
+              "data_class": {
+                "type": "string",
+                "enum": ["contest_provided", "external_public", "model_simulation", "survey_field"],
+                "description": "数据来源分类（与 dataprep 的 data_class 一致）"
+              },
+              "provenance": {
+                "type": "object",
+                "description": "外部数据必须有；赛题自带可省",
+                "properties": {
+                  "institution": { "type": "string" },
+                  "dataset": { "type": "string" },
+                  "accessed_at": { "type": "string" },
+                  "citation": { "type": "string", "description": "GB/T 7714 著录" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "stages": {
+      "type": "array",
+      "description": "处理阶段序列，按执行顺序。每级都要能追溯到上一级的哈希。",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["stage", "inputs", "transform", "outputs"],
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": ["processed", "feature", "test_result"],
+            "description": "处理阶段名，与 Data/{processed,feature,test_result} 目录对应"
+          },
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "description": "本阶段读了哪些文件（含上一阶段产物或 raw）",
+            "items": {
+              "type": "object",
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+                "source_stage": { "type": "string", "description": "raw / processed / feature" }
+              }
+            }
+          },
+          "transform": {
+            "type": "object",
+            "description": "过程记录：谁做了变换、用什么脚本、什么参数、能否复现",
+            "required": ["script", "script_sha256"],
+            "properties": {
+              "script": { "type": "string", "description": "执行变换的脚本路径" },
+              "script_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+              "params": { "type": "object", "description": "关键参数（阈值/插补方法/编码方式等）" },
+              "random_seed": { "type": ["integer", "null"] },
+              "env": {
+                "type": "object",
+                "properties": {
+                  "python": { "type": "string" },
+                  "packages": { "type": "object" }
+                }
+              },
+              "operations": {
+                "type": "array",
+                "description": "逐条处理动作（清洗/插补/编码/缩放/划分），每条形如 {op, columns, before, after, reason}",
+                "items": {
+                  "type": "object",
+                  "required": ["op"],
+                  "properties": {
+                    "op": { "type": "string" },
+                    "columns": { "type": "array", "items": { "type": "string" } },
+                    "before": { "type": ["string", "number", "null"] },
+                    "after": { "type": ["string", "number", "null"] },
+                    "reason": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["path", "sha256", "rows", "cols"],
+              "properties": {
+                "path": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+                "rows": { "type": "integer", "minimum": 0 },
+                "cols": { "type": "integer", "minimum": 0 },
+                "columns": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "diff": {
+            "type": "object",
+            "description": "本阶段前后的可核对差异（交叉检验依据）",
+            "properties": {
+              "rows_delta": { "type": ["integer", "null"] },
+              "cols_delta": { "type": ["integer", "null"] },
+              "nulls_before": { "type": ["integer", "null"] },
+              "nulls_after": { "type": ["integer", "null"] },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "invariants": {
+      "type": "object",
+      "description": "必须成立的不变式。由 scripts/validate_data_lineage.py 逐条机器校验。",
+      "required": ["raw_unmodified", "chain_continuous"],
+      "properties": {
+        "raw_unmodified": {
+          "type": "boolean",
+          "description": "raw 文件当前 sha256 与登记值一致"
+        },
+        "chain_continuous": {
+          "type": "boolean",
+          "description": "每个 stage 的 inputs 都能匹配上一级 outputs 的 path+sha256（无断裂）"
+        },
+        "reproducible": {
+          "type": ["boolean", "null"],
+          "description": "有 script_sha256 + params + random_seed，可重跑复现"
+        },
+        "row_conservation": {
+          "type": ["boolean", "null"],
+          "description": "行数变化有 operations 解释（删行必须有理由）"
+        }
+      }
+    }
+  }
+}

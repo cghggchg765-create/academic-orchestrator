@@ -243,8 +243,10 @@ class WorkflowContractsTest(unittest.TestCase):
             self.run_state("node-start", n, "--dir", str(self.project))
             self.run_state("node-finish", n, "--agent", executors[n], "--skills", skills[n], "--dir", str(self.project))
             # 审阅-修改循环：上游必须审阅 PASS 才能被下游 node-start 放行
+            # N2 额外要求数据血缘台账（2.0.0 D1 门禁），此处豁免以聚焦管线前置条件测试
             self.run_state("node-review", n, "--agent", "reviewer", "--result", "PASS",
-                           "--skills", skills[n], "--summary", "ok", "--dir", str(self.project))
+                           "--skills", skills[n], "--summary", "ok",
+                           "--allow-missing-lineage", "--dir", str(self.project))
         # 删除 N3 的 artifact 目录 ModelDocs 模拟缺失
         shutil.rmtree(str(self.project / "ModelDocs"), ignore_errors=True)
         prep = orch.prepare_node(str(self.project), "N4", strict=True)
@@ -376,8 +378,10 @@ class WorkflowContractsTest(unittest.TestCase):
             self.run_state("node-start", n, "--dir", str(self.project))
             self.run_state("node-finish", n, "--agent", executors[n], "--skills", skills[n], "--dir", str(self.project))
             # 审阅-修改循环：上游必须审阅 PASS 才能被下游 node-start 放行
+            # N2 额外要求数据血缘台账（2.0.0 D1 门禁），此处豁免以聚焦管线前置条件测试
             self.run_state("node-review", n, "--agent", "reviewer", "--result", "PASS",
-                           "--skills", skills[n], "--summary", "ok", "--dir", str(self.project))
+                           "--skills", skills[n], "--summary", "ok",
+                           "--allow-missing-lineage", "--dir", str(self.project))
         plan = orch.iteration_plan(str(self.project), "N4")
         self.assertEqual(plan["status"], "ready")
         self.assertEqual(plan["reviewer"], "mm-code-reviewer")
@@ -841,7 +845,7 @@ class WorkflowContractsTest(unittest.TestCase):
             self.run_state("node-review", n, "--agent", "reviewer", "--result", "PASS",
                            "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                                         "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
-                           "--summary", "ok", "--dir", str(self.project))
+                           "--summary", "ok", "--allow-missing-lineage", "--dir", str(self.project))
         self.run_state("round-start", "N4", "--dir", str(self.project))
         r = self.run_state("round-score", "N4", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
                            "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
@@ -869,7 +873,7 @@ class WorkflowContractsTest(unittest.TestCase):
             self.run_state("node-review", n, "--agent", "reviewer", "--result", "PASS",
                            "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                                         "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
-                           "--summary", "ok", "--dir", str(self.project))
+                           "--summary", "ok", "--allow-missing-lineage", "--dir", str(self.project))
         # N4 round-score 达标 → A1 自动 PASS
         self.run_state("round-start", "N4", "--dir", str(self.project))
         self.run_state("round-score", "N4", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
