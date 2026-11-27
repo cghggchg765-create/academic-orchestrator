@@ -1181,3 +1181,46 @@ class CodeScaffoldNoShellTest(Base):
                          "100 行 docstring 不应计入文件行数")
         self.assertNotIn("problem_1/documented.py", long_funcs,
                          "50 行 docstring 不应计入函数行数")
+
+
+class LegacyMaterialMigrationTest(Base):
+    """旧版 Material/similar_papers 自动迁移到 External/refs/papers。
+
+    回归背景：similar_papers 曾放同行论文，与 External/refs/ 职责重叠——
+    同一件事两个入口，迟早放错地方。统一收进只读引用区后，
+    老项目必须能自动搬迁，否则用户升级会丢材料。
+    """
+
+    def test_material_papers_dir_removed_from_scaffold(self):
+        """新项目不再建 Material/similar_papers 与 Material/template。"""
+        self.assertFalse((self.project / "Material" / "similar_papers").exists(),
+                         "新项目不应再建 Material/similar_papers/")
+        self.assertFalse((self.project / "Material" / "template").exists(),
+                         "Material/template 零引用，不应再建")
+        self.assertTrue((self.project / "External" / "refs" / "papers").is_dir(),
+                        "应改为 External/refs/papers/")
+
+    def test_upgrade_heal_moves_papers_with_structure(self):
+        """旧目录内容（含子目录）应完整搬到新位置，旧目录清空。"""
+        old = self.project / "Material" / "similar_papers"
+        (old / "2023-A").mkdir(parents=True, exist_ok=True)
+        (old / "paper1.md").write_text("# 论文1\n", encoding="utf-8")
+        (old / "2023-A" / "paper2.md").write_text("# 论文2\n", encoding="utf-8")
+
+        r = self.state("upgrade-heal", "--apply", check=False)
+        self.assertEqual(r.returncode, 0, f"upgrade-heal 失败: {r.stderr}")
+
+        new = self.project / "External" / "refs" / "papers"
+        self.assertTrue((new / "paper1.md").is_file(), "顶层文件应迁移")
+        self.assertTrue((new / "2023-A" / "paper2.md").is_file(), "子目录结构应保留")
+        self.assertFalse(old.exists() and any(old.iterdir()), "旧目录应被清空")
+
+    def test_migration_is_previewable(self):
+        """不加 --apply 时只预览，不动文件。"""
+        old = self.project / "Material" / "similar_papers"
+        old.mkdir(parents=True, exist_ok=True)
+        (old / "keep.md").write_text("# 保留\n", encoding="utf-8")
+        r = self.state("upgrade-heal", check=False)
+        self.assertIn("迁移旧目录", r.stdout)
+        self.assertIn("预览模式", r.stdout)
+        self.assertTrue((old / "keep.md").is_file(), "预览不应搬走文件")

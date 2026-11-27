@@ -74,7 +74,9 @@ MathModel_Contest/
 ├── ReportPaper/            # LaTeX（main/preamble/config/ref.bib/sections/img/tables；PDF 仅为编译产物）
 ├── ModelDocs/              # model-framework.md + formula.md + assumption.md（modeler 产物）+ sensitivity/error/validation（tuner 产物）
 ├── SubmissionPackage/      # 论文.pdf + README-提交说明 + Appendix_附件 + 代码压缩包 + 参赛提交清单.md（reviewer 终审核对生成）
-├── Material/                # similar_papers / template / training_notes / contest_experience
+├── Material/               # 自有笔记：training_notes / contest_experience（第三方资料不放这里）
+├── External/refs/          # 只读引用区：同行代码/方案/论文/模板（哈希锁定 + 污染检测）
+│   ├── papers/  templates/    #   转成自有产物须 derive 登记来源
 ├── LogRecord/              # daily-log.md + bug-fix-log.md + version-update.md（AI 每轮迭代自动追加，随状态一起 git 提交）
 ├── BackupArchive/          # draft/mid/final 人工备份（git round 分支为主，此目录人工兜底）
 └── DefenseMaterial/        # defense_ppt / defense-script / show-figures（答辩期可选）

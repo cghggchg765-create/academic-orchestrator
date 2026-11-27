@@ -36,3 +36,10 @@ LEGACY_EMPTY_DIRS = [
     "BackupArchive/draftbackup", "BackupArchive/midbackup", "BackupArchive/finalbackup",
     "DefenseMaterial/showfigures",
 ]
+
+# 旧版目录迁移（目录级，由 upgrade-heal / project-repair 搬运内容后删除空壳）
+# Material/similar_papers 曾用来放同行论文，与 External/refs/ 职责重叠：
+# 同一件事两个入口，迟早放错地方。现统一收进只读引用区（受哈希锁定 + 污染检测）。
+LEGACY_DIR_MOVES = {
+    "Material/similar_papers": "External/refs/papers",
+}

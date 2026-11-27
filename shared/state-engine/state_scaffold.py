@@ -416,11 +416,16 @@ STANDARD_DIRS = [
     "ReportPaper/LaTeX/tables", "ReportPaper/LaTeX/build",
     "ModelDocs",
     "SubmissionPackage",
-    "Material/similar_papers", "Material/template",
     # 外部资料隔离区（见 scripts/external_isolation.py）：
-    # 同行代码/方案/论文只允许落 External/refs/，与自有产物物理分开。
+    # 同行代码/方案/**论文/模板**只允许落 External/refs/，与自有产物物理分开。
     # 引用区受哈希锁定，改动会被 check 检出；转成自有产物须 derive 登记来源。
-    "External/refs",
+    #
+    # 为什么不再有 Material/similar_papers 与 Material/template：
+    #   · 前者放同行论文，与 refs/ 职责重叠 → 已并入 External/refs/papers/
+    #     （老项目由 LEGACY_DIR_MOVES 自动搬迁）；
+    #   · 后者全仓零引用、从来没有生产者 → 直接删除，不留歧义入口。
+    # 保留在 Material/ 下的只剩自有笔记（training_notes / contest_experience）。
+    "External/refs", "External/refs/papers", "External/refs/templates",
     "LogRecord",
     "BackupArchive/draft-backup", "BackupArchive/mid-backup", "BackupArchive/final-backup",
     "DefenseMaterial/show-figures",
@@ -646,7 +651,7 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
     # .gitkeep 目录清单从 STANDARD_DIRS 派生（单一事实源，禁止另写一份目录清单导致重复目录）
     gitkeep_dirs = [d for d in STANDARD_DIRS if d.endswith(("raw", "tables", "figures", "txt_result", "model_save",
                                                              "schematic", "curve", "heatmap", "comparison",
-                                                             "LaTeX", "similar_papers", "template",
+                                                             "LaTeX", "refs", "papers", "templates",
                                                              "draft-backup", "mid-backup", "final-backup",
                                                              "show-figures", "agents", "cases"))]
     for d in gitkeep_dirs:

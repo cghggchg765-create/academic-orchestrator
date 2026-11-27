@@ -181,11 +181,17 @@ python scripts/external_isolation.py scan --root .
 - **已 `derive` 登记的雷同降级为 INFO**（视为合规参考）；未登记才是 HIGH。
 - 位置污染按**文件名**判定，不受行数门槛限制。
 
-### 与 `Material/` 的区别
+### 与 `Material/` 的区别（边界已收敛为单一入口）
 
-`Material/`（`similar_papers` / `template`）是**赛题材料与自有笔记**，属于项目资产；
-`External/refs/` 是**第三方成果**，需要来源追踪与污染防护。两者不要混用：
-第三方代码/方案一律进 `External/refs/`。
+| 目录 | 放什么 | 性质 |
+|---|---|---|
+| `External/refs/` | 同行代码 / 方案 / **论文** / 模板 | 第三方成果，只读 + 哈希锁定 + 污染检测 |
+| `External/refs/papers/` | 同行论文（按题型/方法归类） | 同上 |
+| `Material/` | 仅**自有**笔记（`training_notes` / `contest_experience`） | 项目资产，可自由编辑 |
+| `Material/`（旧 `similar_papers`） | — | **已废弃**：与 `refs/` 职责重叠，老项目由 `upgrade-heal` 自动搬到 `External/refs/papers/` |
+
+**判据很简单：别人的东西 → `External/refs/`；我们自己写的东西 → `Material/` 或对应产物目录。**
+第三方代码/方案/论文一律不得放 `Material/`，避免出现"同一件事两个入口"。
 
 ## 支持的工作流
 

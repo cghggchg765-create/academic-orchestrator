@@ -563,14 +563,15 @@ class WorkflowContractsTest(unittest.TestCase):
         orch = importlib.util.module_from_spec(spec)
         sys.modules["orchestrator_runtime"] = orch
         spec.loader.exec_module(orch)
-        # 模拟已有材料
-        (self.project / "Material" / "similar_papers" / "参考论文.md").write_text("# 旧论文\n", encoding="utf-8")
+        # 模拟已有材料（自有材料区；同行论文按新设计归 External/refs/，
+        # 那里是只读参考，不参与 material_intake）
+        (self.project / "Material" / "旧论文.md").write_text("# 旧论文\n", encoding="utf-8")
         (self.project / "BackupArchive" / "旧代码").mkdir(parents=True, exist_ok=True)
         (self.project / "BackupArchive" / "旧代码" / "solver_old.py").write_text("print('old')\n", encoding="utf-8")
         (self.project / "Data" / "raw" / "history.csv").write_text("a,b\n1,2\n", encoding="utf-8")
         det = orch.detect_existing_materials(str(self.project))
         self.assertTrue(det["has_existing"])
-        self.assertIn("Material/similar_papers/参考论文.md", det["found"]["paper"])
+        self.assertIn("Material/旧论文.md", det["found"]["paper"])
         self.assertIn("BackupArchive/旧代码/solver_old.py", det["found"]["code"])
         self.assertIn("Data/raw/history.csv", det["found"]["data"])
         self.assertIsNotNone(det["reuse_plan"])
@@ -583,8 +584,8 @@ class WorkflowContractsTest(unittest.TestCase):
         self.assertTrue(plan["has_existing"])
         self.assertEqual(plan["total"], 3)
         by_file = {t["file"]: t for t in plan["tasks"]}
-        self.assertTrue(by_file["Material/similar_papers/参考论文.md"]["must_read_content"])
-        self.assertTrue(any("关键结论" in e for e in by_file["Material/similar_papers/参考论文.md"]["extract"]))
+        self.assertTrue(by_file["Material/旧论文.md"]["must_read_content"])
+        self.assertTrue(any("关键结论" in e for e in by_file["Material/旧论文.md"]["extract"]))
         self.assertIn("字段与含义", by_file["Data/raw/history.csv"]["extract"])
         self.assertTrue(any("对应第几问" in e for e in by_file["BackupArchive/旧代码/solver_old.py"]["extract"]))
         self.assertEqual(plan["register_file"], "state/material_index.json")

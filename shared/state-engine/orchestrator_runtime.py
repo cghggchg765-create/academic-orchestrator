@@ -247,11 +247,15 @@ IGNORED_PARTS = {".git", "state", "LogRecord", "__pycache__", ".venv", "build", 
 
 
 def detect_existing_materials(project: str | Path) -> dict[str, Any]:
-    """扫描项目内已有论文/代码/数据（Material/、BackupArchive/、根目录等），返回复用建议。
+    """扫描项目内**自有**论文/代码/数据（Material/、BackupArchive/、根目录等），返回复用建议。
 
     供 orchestrator 在 Phase 0 与 /mm 总控调用：检测到已有材料时，应走 sync_import
     复用（代码→Code/legacy 审阅修复、数据→Data/raw、论文→ReportPaper/LaTeX/drafts 转换），
     而不是从零开始。
+
+    ⚠️ 不扫 External/（只读引用区）：那里的第三方资料是**参考**而非**复用**。
+    把别人的论文/代码搬进 ReportPaper/Code 会让它变成"我们自己的产物"，
+    正是隔离机制要防止的污染。参考用法见 external_isolation.py（add/derive/scan）。
     """
     root = Path(project).resolve()
     scan_dirs = [root, root / "Material", root / "BackupArchive", root / "Data" / "raw", root / "ProblemInfo"]
@@ -357,7 +361,9 @@ def organize_existing_materials(project: str | Path) -> dict[str, Any]:
 READ_INTENT = {
     "paper": {
         "read": ["标题/题型", "所用方法/模型", "关键结论与数值", "图表清单", "与本题的相关性（可借鉴点）"],
-        "categorize_to": "Material/similar_papers/（按题型/方法归类）",
+        # 同行论文属于第三方成果 → 归入只读引用区（受哈希锁定 + 污染检测），
+        # 不再放 Material/similar_papers/（那是自有项目资产区，两者曾职责重叠）。
+        "categorize_to": "External/refs/papers/（按题型/方法归类）",
         "register_to": "state/material_index.json：内容摘要、方法、可借鉴点、对应节点（N1 选题参考 / N7 论文参考）",
     },
     "code": {

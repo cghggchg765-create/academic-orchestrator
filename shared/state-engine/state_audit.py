@@ -513,9 +513,10 @@ def check_legacy_names(root):
 
 # ---------------------------------------------------------------- 升级自愈（旧版遗留迁移）
 try:  # 容错：项目内旧副本可能缺 legacy_names.py，缺时按无遗留处理（init 已同步复制配套模块）
-    from legacy_names import LEGACY_EMPTY_DIRS, LEGACY_RENAME, LEGACY_STATE_DIR  # 旧名映射（lint 豁免）
+    from legacy_names import LEGACY_EMPTY_DIRS, LEGACY_RENAME, LEGACY_STATE_DIR, LEGACY_DIR_MOVES  # 旧名映射（lint 豁免）
 except ImportError:
     LEGACY_EMPTY_DIRS, LEGACY_RENAME = {}, {}
+    LEGACY_DIR_MOVES = {}
     LEGACY_STATE_DIR = "00" + "_State"  # 与 legacy_names.py 同义；lint 红线要求不出现字面旧名
 
 
@@ -541,6 +542,11 @@ def plan_migration(root):
         oldp, newp = os.path.join(root, old), os.path.join(root, new)
         if os.path.exists(oldp) and not os.path.exists(newp):
             actions.append(f"重命名文件 {old} -> {new}")
+    # 目录级迁移：旧目录有内容就搬过去（不覆盖同名），搬空后删除空壳
+    for old, new in LEGACY_DIR_MOVES.items():
+        oldp = os.path.join(root, old)
+        if os.path.isdir(oldp) and os.listdir(oldp):
+            actions.append(f"迁移旧目录 {old} -> {new}")
     for d in LEGACY_EMPTY_DIRS:
         oldp = os.path.join(root, d)
         if os.path.isdir(oldp) and not os.listdir(oldp):
@@ -577,6 +583,24 @@ def apply_migration(root, actions):
             if os.path.isdir(old) and not os.path.isdir(new):
                 os.makedirs(os.path.dirname(new), exist_ok=True)
                 os.rename(old, new)
+        elif action.startswith("迁移旧目录"):
+            # 目录级迁移：保留相对结构，不覆盖同名文件，搬空后删旧壳。
+            # 典型场景 Material/similar_papers/ → External/refs/papers/
+            parts = action.split(" -> ")
+            old = os.path.join(root, parts[0].split(" ", 1)[1])
+            new = os.path.join(root, parts[1])
+            if os.path.isdir(old):
+                for dirpath, _, filenames in os.walk(old):
+                    rel = os.path.relpath(dirpath, old)
+                    for f in filenames:
+                        src = os.path.join(dirpath, f)
+                        dst = os.path.join(new, "" if rel == "." else rel, f)
+                        if not os.path.exists(dst):
+                            os.makedirs(os.path.dirname(dst), exist_ok=True)
+                            shutil.move(src, dst)
+                for dirpath, dirnames, filenames in os.walk(old, topdown=False):
+                    if not dirnames and not filenames:
+                        os.rmdir(dirpath)
         elif action.startswith("重命名文件"):
             parts = action.split(" -> ")
             old = os.path.join(root, parts[0].split(" ", 1)[1])

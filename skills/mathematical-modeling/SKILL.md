@@ -198,7 +198,9 @@ CUMCM 数学建模全流程
    - 代码：入口/依赖、解决第几问、输入输出格式、关键算法与可复用模块、需修复点；
    - 数据：字段与含义、行数/缺失/异常、来源口径、与题目数据需求对应；
    回填到 `state/material_index.json`（summary/key_attributes/reusable_for/needs_repair）；
-4. **调用**：后续节点按索引取用——N1 参考 similar_papers 选题、N2 清洗 Data/raw、N4 审阅修复 Code/legacy、N7 基于 drafts 改写；`sync_import.py --apply` 兼容清单随状态提交；
+4. **调用**：后续节点按索引取用——N1 参考 `External/refs/papers` 选题（第三方论文只读参考）、N2 清洗 Data/raw、N4 审阅修复 Code/legacy、N7 基于 drafts 改写；`sync_import.py --apply` 兼容清单随状态提交；
+   > 注：`External/refs/` 里的第三方资料**不参与 material_intake**（那是"参考"不是"复用"），
+   > 它的管理入口是 `scripts/external_isolation.py`（add / derive / scan）。
 5. 用户明确"已有材料在别处"时，以用户给出的路径为 `--source`；检测结果与复用决策写入交付报告。
 
 ---
@@ -304,7 +306,7 @@ Phase 8: [07 产物 + 全部产物] → reviewer → N8 审阅记录 + Submissio
 
 | 节点 | 执行 | 上游输入 | 下游输出 → 谁 | 配对审阅 Agent | 门禁 |
 |:----:|------|----------|---------------|----------------|:----:|
-| N1 选题拆解 | selector | 题面+problem_lock+similar_papers | ProblemNotes+KeyRequirements → N2/N3 | reviewer | M1+H1 |
+| N1 选题拆解 | selector | 题面+problem_lock+External/refs/papers（同行论文只读参考） | ProblemNotes+KeyRequirements → N2/N3 | reviewer | M1+H1 |
 | N2 数据预处理 | dataprep | ProblemNotes+Data/raw | DataLog+processed/feature → N3/N4 | reviewer | D1 |
 | N3 模型搭建 | modeler | ProblemNotes+DataLog | ModelDocs 三件 → N4/N5/N6/N7 | reviewer | P1 |
 | N4 代码（迭代环） | coder | formula.md+DataLog | Code/（output 唯一口）→ N5/N6/N8 | **mm-code-reviewer** | P2+A1+H2+S\<n\> |
