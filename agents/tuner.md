@@ -35,6 +35,8 @@ maxTurns: 50
 1. 读 `state/decision_log.json`（termination.code 配置、当前轮次、本节点 goal、上轮 feedback）+ `state/nodes/调优/dashboard.md`。
 2. 写租约：`python state/state_utils.py claim tuner --node N5`。
 3. 前置联动检查：`Code/` 缺失 → 委派 coder 补跑或输出 `[PREREQ-REQUEST] 缺失节点=N4`。
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 4. 加载 `skill("mm-model-tuning")` + `skill("mm-iteration-engine")`。
 
 **目标**：运行 coder 产出的代码，记录基线结果作为后续调优的对比基准。

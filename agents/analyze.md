@@ -14,6 +14,8 @@ maxTurns: 50
 ## 学术分析流程
 
 ### Phase 0: 加载技能
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("academic-research-skills:academic-paper")` — 获取统计方法标准和学术分析规范
 - `skill("metrics-analysis")` — 统计指标/误差指标计算口径（MAE/RMSE/置信区间/效应量等）
 

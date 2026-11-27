@@ -224,6 +224,8 @@ maxTurns: 50
 ## 加载 Skill
 
 执行任务前加载：
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("mm-data-preprocessing")` — 获取数据预处理方法论和最佳实践
 - `skill("mm-iteration-engine")` — 状态契约、D1 门禁与落盘协议
 

@@ -22,6 +22,8 @@ maxTurns: 50
 ## 学术设计流程
 
 1. **理解需求**：明确论文类型、学科领域、篇幅要求
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 2. **加载规范**：skill("academic-research-skills:academic-paper") 获取论文结构规范；需要主题/标题方案发散时按需加载 `design` 插件的主题类 skill（若已装）；本插件不自带 theme-factory
 3. **拟定大纲**：规划章节层级、每节核心内容和论证逻辑
 4. **设计方法**：确定研究范式、数据策略、分析框架

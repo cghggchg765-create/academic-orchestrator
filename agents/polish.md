@@ -22,6 +22,8 @@ maxTurns: 50
 ## 学术润色流程
 
 ### Phase 0: 加载技能
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("academic-research-skills:academic-paper")` — 获取写作规范和润色标准
 - `skill("humanizer")` — 获取 AI 模式检测规则和替换建议
 

@@ -55,11 +55,94 @@ def _import_router():
     )
 
 
+def _plugin_taxonomy_path(here: str) -> str:
+    """定位**插件仓库**自带的能力词表（用于与项目内副本比对版本）。
+
+    两种运行环境路径不同，都要覆盖：
+      · 仓库内直接跑：<repo>/shared/state-engine/ → <repo>/shared/skill-routing/
+      · 项目内副本跑：<proj>/state/              → 项目内没有仓库词表，
+        此时插件词表在**插件缓存**里（`$ZCODE_PLUGIN_ROOT` 或插件缓存目录）。
+    """
+    candidates = [
+        os.path.abspath(os.path.join(here, "..", "skill-routing", "capability_taxonomy.json")),
+        os.path.abspath(os.path.join(here, "..", "..", "shared", "skill-routing",
+                                     "capability_taxonomy.json")),
+    ]
+    plugin_root = os.environ.get("ZCODE_PLUGIN_ROOT")
+    if plugin_root:
+        candidates.append(os.path.join(plugin_root, "shared", "skill-routing",
+                                       "capability_taxonomy.json"))
+    # 插件缓存：<cache>/<marketplace>/<plugin>/<version>/shared/skill-routing/
+    cache = os.path.join(os.path.expanduser("~"), ".zcode", "cli", "plugins", "cache")
+    if os.path.isdir(cache):
+        try:
+            markets = sorted(os.listdir(cache))
+        except OSError:
+            markets = []
+        for market in markets:
+            if "academic-orchestrator" not in market and "math-modeling" not in market:
+                continue
+            mdir = os.path.join(cache, market)
+            if not os.path.isdir(mdir):
+                continue
+            for plugin in sorted(os.listdir(mdir)):
+                pdir = os.path.join(mdir, plugin)
+                if not os.path.isdir(pdir):
+                    continue
+                for ver in sorted(os.listdir(pdir), reverse=True):
+                    cand = os.path.join(pdir, ver, "shared", "skill-routing",
+                                        "capability_taxonomy.json")
+                    if os.path.isfile(cand):
+                        candidates.append(cand)
+                        break
+    for c in candidates:
+        if os.path.isfile(c):
+            return c
+    return ""
+
+
+def _stale_taxonomy_warning(matcher, root: str) -> str:
+    """检测项目内词表是否落后于插件版本。
+
+    为什么需要：`_import_router` 从项目 `state/skill-routing/` 加载词表副本，
+    插件升级后老项目仍用旧副本——改了词表/能力项却不生效，且**没有任何提示**。
+    这正是"装了 nature 系列却从不被选中"的隐形原因之一。
+    """
+    try:
+        project_tax = matcher.load_taxonomy()
+    except (OSError, ValueError):
+        return ""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo_tax_path = _plugin_taxonomy_path(here)
+    if not repo_tax_path:
+        return ""
+    # 项目副本与插件词表是同一份文件时无需比较（仓库内直接跑）
+    if os.path.abspath(matcher.TAXONOMY_PATH) == os.path.abspath(repo_tax_path):
+        return ""
+    try:
+        with open(repo_tax_path, encoding="utf-8") as fh:
+            repo_tax = json.load(fh)
+    except (OSError, ValueError):
+        return ""
+    p_ver, r_ver = project_tax.get("version", "?"), repo_tax.get("version", "?")
+    if p_ver == r_ver:
+        return ""
+    p_kw = sum(len(c.get("keywords") or []) for c in project_tax.get("capabilities", []))
+    r_kw = sum(len(c.get("keywords") or []) for c in repo_tax.get("capabilities", []))
+    return (f"项目内能力词表版本 {p_ver} 落后于插件 {r_ver}"
+            f"（关键词 {p_kw} → {r_kw} 个）。本次匹配用的是**旧词表**，"
+            f"可能导致新装的 skill 不被选中。\n"
+            f"  刷新：python state/state_utils.py init --sync-runtime --dir {root}")
+
+
 def build_manifest(root: str, node: str, task: str = "", extra_capabilities: list[str] | None = None,
                    extra_roots: list[str] | None = None) -> dict:
     """生成一个节点的 skill 派发清单（含能力→skill 的匹配依据）。"""
     discovery, matcher = _import_router()
     taxonomy = matcher.load_taxonomy()
+    stale = _stale_taxonomy_warning(matcher, root)
+    if stale:
+        print(f"[state_utils] ⚠ {stale}", file=sys.stderr)
     skills = discovery.discover(root, extra=extra_roots)
 
     if task:

@@ -79,6 +79,8 @@ maxTurns: 50
 4. **加载依据**：
    - 读 `ModelDocs/formula.md`：目标函数、约束条件、输入数据格式、输出结果格式、公式编号列表（用于代码注释引用）；
    - 读 `Data/DataLog.md`：数据文件路径与格式、缺失值处理方式、预处理步骤；
+   <!-- skill-access -->
+   skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
    - `skill("mm-algorithm-dev")` 获取竞赛代码开发规范；`skill("mm-iteration-engine")` 获取迭代循环与 git 规范。
 5. **搜索前置（P0 强制，迭代环 SEARCH 步骤）**：
    - 先读 `state/search_sources.json` **按实际需求选检索地址**：要参考实现/开源代码 → github-code / paperswithcode；要方法论论文/算法原理 → paper-academic；要对标获奖论文 → contest-papers；要库用法 → lib-docs（context7）；要数据集/预训练模型 → model-zoo；

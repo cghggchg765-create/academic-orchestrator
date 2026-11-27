@@ -64,6 +64,8 @@ maxTurns: 50
 2. **shard-content 模式只读取 `input_manifest.json` 指定的目标文件/行段、相邻上下文和 evidence**；不得为了“全面”而读取完整 `main.tex`、全部章节和全部上游产物。只有 `join-review` 才读取组装后的完整论文。
 3. 读取 manifest 指定的前置证据，验证论文中公式、代码、调优结果和图表是否同源；未列出的文件只记录为待 join 检查，不自行扩大上下文。
 4. 审阅报告必须带 `scope_id`、`phase`、`target_ref`、`evidence`、问题类别（content/format/cross-scope）和修复优先级；空报告、只有“通过”而无证据、缺少问题清单字段 = `EMPTY_RETURN`，不得落 PASS。
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 5. 加载 skill：`skill("mm-self-review")`（竞赛评审规范）+ `skill("mm-iteration-engine")`（scope/迭代衔接）+ `skill("mm-latex-writing")`（格式规范）+ `skill("figure-table-benchmark")`（图表/表格文献对标口径，核对完备性/学术性）
 
 #### 国赛评分标准映射表（归一化 0-10）

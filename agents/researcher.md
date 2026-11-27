@@ -213,6 +213,8 @@ maxTurns: 50
 
 | 场景 | 加载 skill |
 |------|-----------|
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 | 深度学术研究 | skill("academic-research-skills:deep-research") |
 | 技术问题搜索 | skill("problem-solving") |
 | 代码模式搜索 | GitHub MCP / gh_grep（本插件不自带 investigate skill） |

@@ -41,6 +41,8 @@ maxTurns: 50
 3. 读取 `ModelDocs/formula.md`（模型结构流程图、变量关系图、求解结果展示需求）
 4. 读取 `ModelDocs/sensitivity-analysis.md` + `error-analysis.md`（敏感性图、参数对比图、收敛曲线）
 5. 读取 `Data/DataLog.md`（数据分布图、缺失值分布图、特征相关性图）并完成数据分类：题赛自带/外部公开/模型仿真输出/问卷实测。
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 6. 加载 skill：`skill("mm-visualization")`（竞赛图表规范）+ `skill("mm-iteration-engine")`（V1 门禁与落盘协议）+ `skill("figure-table-benchmark")`（图表/表格文献对标口径：出图前先看同领域论文实际怎么画、表格有哪些列名，避免漏掉同行惯例字段）。
 7. 输出可视化需求清单（需求→模型对象→数据字段→数据分类→候选图表→来源/引用→目标文件名），不直接绘图。
 

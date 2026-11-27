@@ -26,6 +26,8 @@ maxTurns: 50
 5. 编译成功后交给 `latex_linter` 做 format/join-format 复检（重点：页码居中、注释精简去重复、图表不远离引用文段），再由 `reviewer` 做反向内容与全局 join review；未通过只返到对应 Agent。
 
 ### Phase 0: 加载技能
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("latex-guard")` — 获取 LaTeX 排版规范和格式铁律
 
 ### Phase 1: 版式规范检查

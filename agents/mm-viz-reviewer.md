@@ -32,6 +32,8 @@ maxTurns: 40
 ### Phase 1: 加载 Skill（🔴 必须，先于一切核对）
 
 ```
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 skill("mm-visualization")      # 竞赛图表规范（选型/标注/命名/错误黑名单）
 skill("mm-iteration-engine")   # 门禁 V1 定义与落盘协议
 skill("figure-table-benchmark") # 图表/表格文献对标口径（完备性/学术性判定；与 B1 门禁配套）

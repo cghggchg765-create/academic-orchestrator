@@ -10,6 +10,8 @@ maxTurns: 50
 # Academic Humanize — 学术去AI化工作流Agent
 
 ## 依赖
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("humanizer")` — 36种AI模式检测 + AI-ness Score + 中文C1-C7风险提示
 - `skill("academic-humanize")` — 学术文本人性化（缩写/过渡词/被动/同义词）
 - `gh_grep_searchGitHub` — 可选：真实人类语料对比

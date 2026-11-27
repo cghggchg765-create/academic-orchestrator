@@ -28,14 +28,34 @@ maxTurns: 50
 2. 读 `state/registry.json` 确认本节点配对与门禁（N4→P2/A1，N5→T1）。
 3. 读对应节点首页 `state/nodes/<N4-代码|N5-调优>/dashboard.md`（上轮 feedback 是重点审阅对象）。
 
-### Phase 1: 加载 Skill（🔴 必须，先于一切评分）
+### Phase 1: 取得评分口径（🔴 必须，先于一切评分）
 
+**按可用方式二选一，两条路等价**：
+
+**路径 A（推荐，任何工具集都能用）— 读注入的 skill 正文**
+主 Agent 派发时应已用下面命令把正文注入 prompt：
+```bash
+python scripts/skill_context.py --name mm-iteration-engine,mm-algorithm-dev,code-review --body-only
 ```
+若 prompt 里已带 skill 正文，直接按正文口径评分；若没带，**自己用 Read 读**：
+```bash
+python scripts/skill_context.py --name mm-iteration-engine --path-only   # 拿到路径后 Read
+```
+
+**路径 B（仅当会话确实有 Skill 工具时）**
+```
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 skill("mm-iteration-engine")   # 迭代循环、评分体系、硬上限与仲裁规则
 skill("mm-algorithm-dev")      # 代码规范与运行验证 Checklist（评分锚点来源）
 skill("code-review")           # 系统化审查流程
-skill("mm-model-tuning")       # 仅审 N5 调优产物时加读（基线/超参对比/敏感性/鲁棒性清单）
+skill("mm-model-tuning")       # 仅审 N5 调优产物时加读
 ```
+
+> ⚠️ **无 Skill 工具不是缺陷**：宿主的子 Agent 工具集可能不含 Skill（会提示
+> "会话工具集无 Skill 工具"）。此时按路径 A 执行，**并在审阅记录开头如实声明**：
+> `Skill 工具不可用；已按 <skill 名> 的公开口径等价执行（内容来源：<路径>）`。
+> 禁止假装加载过，也禁止因此拒绝审阅。
 
 在最终审阅记录中声明："已读 Skill: mm-iteration-engine v1.1.0, mm-algorithm-dev, code-review（审 N5 时另加 mm-model-tuning）"。
 

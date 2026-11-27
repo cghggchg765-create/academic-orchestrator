@@ -210,7 +210,8 @@ def main():
 
     p = sub.add_parser("round-score", help="记录一轮独立评分（仅 N4/N5/N7/N8）")
     p.add_argument("node"); p.add_argument("--round", type=int, required=True); p.add_argument("--scope-id")
-    p.add_argument("--total", type=float, required=True)
+    p.add_argument("--total", type=float,
+                   help="0-10 整体分（主审阅者必填）。维度分工的第二审阅者只提交自己负责的维度，可省略")
     p.add_argument("--dims", required=True, help='JSON 字符串，如 \'{"correctness":8.0,"efficiency":7.0}\'')
     p.add_argument("--judge", required=True, help="独立评审 Agent")
     p.add_argument("--skills-read", required=True, help="评分 Agent 已阅读的评审 Skill，逗号分隔")

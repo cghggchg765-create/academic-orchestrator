@@ -200,7 +200,7 @@ def cmd_node_review(args):
     node = args.node
     info = NODES[node]
     require_independent_reviewer(node, args.agent)
-    require_review_skills(node, args.skills, agent=args.agent)
+    require_review_skills(node, args.skills, agent=args.agent, project=root)
     # 防审阅偷懒：FAIL/BLOCKED 必须附证据路径（evidence）
     # 核心节点 MCP 必调（N1/N3/N4/N5/N7）：PASS 审阅前校验检索留痕，禁止纯内生输出
     if args.result == "PASS":
@@ -278,7 +278,7 @@ def cmd_auto_check(args):
         sys.exit(f"[state_utils] --gate 必须是 H1/H2/H3，实际 {gate}")
     # 核查 Agent 必须是该节点配对审阅 Agent（自动核查 = 独立 Agent 受托执行）
     require_independent_reviewer(node, args.agent)
-    require_review_skills(node, args.skills, agent=args.agent)
+    require_review_skills(node, args.skills, agent=args.agent, project=root)
     summary = args.summary or "自动核查通过"
     report_path = args.report or ""
     if report_path and not os.path.isfile(os.path.join(root, report_path)):

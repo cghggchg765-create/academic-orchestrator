@@ -30,6 +30,8 @@ maxTurns: 60
 ### Phase 1：加载 Skill（🔴 必须先于对标）
 
 ```
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 skill("figure-table-benchmark")   # 七维口径与四步法
 skill("mm-iteration-engine")      # 门禁与落盘协议
 ```

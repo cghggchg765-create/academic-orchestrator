@@ -1,7 +1,7 @@
 {
   "_comment": "能力词表（协调层唯一持有的知识）。本文件只描述『需要什么能力』，绝不记录任何具体 skill 名称。具体用哪个 skill 由 skill_router 在运行时扫描本机已装 skill 的 description 后匹配得出——因此专业 skill 升级、替换、新增都不需要改动本插件。",
   "schema_version": "1.0",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "capabilities": [
     {
       "id": "paper.writing",
@@ -18,7 +18,18 @@
         "academic writing",
         "section writing",
         "drafting sections",
-        "write paper"
+        "write paper",
+        "manuscript",
+        "draft",
+        "restructure",
+        "sections",
+        "drafting",
+        "initial-submission",
+        "writing",
+        "compose",
+        "起草",
+        "论证重构",
+        "正文压缩"
       ],
       "output_kinds": [
         "prose",
@@ -40,7 +51,16 @@
         "abstract",
         "introduction",
         "rhetoric",
-        "style calibration"
+        "style calibration",
+        "polishing",
+        "language edit",
+        "prose",
+        "tone",
+        "wording",
+        "style",
+        "润色",
+        "语言",
+        "措辞"
       ],
       "output_kinds": [
         "prose"
@@ -59,7 +79,12 @@
         "referee",
         "reviewer",
         "manuscript review",
-        "critique"
+        "critique",
+        "referee report",
+        "review report",
+        "reviewing",
+        "评阅",
+        "审阅报告"
       ],
       "output_kinds": [
         "review_report"
@@ -98,7 +123,16 @@
         "meta-analysis",
         "PRISMA",
         "literature review",
-        "citation search"
+        "citation search",
+        "search",
+        "retrieve",
+        "find papers",
+        "arxiv",
+        "pubmed",
+        "文献检索",
+        "文献综述",
+        "related work",
+        "background research"
       ],
       "output_kinds": [
         "review_matrix",
@@ -201,7 +235,12 @@
         "figure",
         "多面板",
         "面板图",
-        "subplot"
+        "subplot",
+        "plotting",
+        "visualization",
+        "visualisation",
+        "可视化",
+        "出图"
       ],
       "output_kinds": [
         "figure"
@@ -221,7 +260,9 @@
         "flowchart",
         "diagram",
         "schematic",
-        "visio"
+        "visio",
+        "architecture",
+        "框架图"
       ],
       "output_kinds": [
         "figure"
@@ -538,5 +579,6 @@
       "mathematical-modeling",
       "mm-iteration-engine"
     ]
-  }
+  },
+  "_changelog": "1.1.0: 补英文关键词（manuscript/draft/restructure/polishing/search/plotting 等）。原词表几乎只有中文词，导致 nature-* 等英文 description 的 skill 匹配分低于 min_score 被过滤——用户装了 skill 却从不被选中。"
 }

@@ -23,6 +23,8 @@ maxTurns: 50
 ## 学术审查流程
 
 ### Phase 0: 加载技能
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("academic-research-skills:academic-paper-reviewer")` — 获取多角度审查规范和魔鬼代言人模式
 
 ### Phase 1: 引用合规审查

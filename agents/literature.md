@@ -17,6 +17,8 @@ maxTurns: 50
 1. **确定关键词**：核心概念 + 同义词 + 上下位词
 2. **选择数据库**：PubMed/arXiv/Google Scholar/DBLP/ACM
 3. **设定筛选标准**：时间范围/引用门槛/期刊等级
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 4. **加载 skill**：skill("academic-research-skills:deep-research") 获取检索方法
 
 ### Phase 2: 文献筛选

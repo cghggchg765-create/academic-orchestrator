@@ -32,6 +32,8 @@ maxTurns: 50
 #### 0.1 加载模型库
 
 执行前加载：
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("mm-model-library")` — 获取常用数学模型库和选择指南
 - `skill("mm-iteration-engine")` — 状态契约与 P1 门禁协议
 

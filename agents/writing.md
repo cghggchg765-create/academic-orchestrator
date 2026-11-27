@@ -50,6 +50,8 @@ maxTurns: 50
 
 1. 读 `state/decision_log.json`、本节点首页和当前 scope 的 `review_workspace_manifest.json`/`handoff.md`；先写 claim 租约。scope 缺失、状态过期、registry digest 不一致或输入哈希不匹配时输出 `[PREREQ-REQUEST]`，不得自行扩大读取范围。
 2. 只读取当前 `input_manifest.json` 中列出的目标章节/小节、相邻上下文和证据指针。上游 `ModelDocs`、`Code/output`、`ResultFigures` 只按 manifest 指定的最小文件读取；**禁止把 `main.tex`、全部章节和全部上游产物一次性喂入**。
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 3. 加载 skill：`skill("mm-latex-writing")`（竞赛 LaTeX 规范）+ `skill("mm-iteration-engine")`（scope/迭代协议）+ `skill("figure-table-benchmark")`（图表/表格文献对标：定表前先查同领域论文的列名与数据项，判定我方表格是否漏项）；按宿主 required_skills 声明，不以自审替代 reviewer。
 4. 规划当前 scope 的修改边界和最小 diff；总页数/全文交叉引用等全局问题写入 aggregate feedback，交给 orchestrator join 阶段，不在单 scope 内擅自重写其他章节：
 

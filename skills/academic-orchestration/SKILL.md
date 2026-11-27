@@ -193,6 +193,62 @@ python scripts/external_isolation.py scan --root .
 **判据很简单：别人的东西 → `External/refs/`；我们自己写的东西 → `Material/` 或对应产物目录。**
 第三方代码/方案/论文一律不得放 `Material/`，避免出现"同一件事两个入口"。
 
+## 🔴 Skill 内容可达性协议（子 Agent 无 Skill 工具时的正规做法）
+
+### 问题
+
+宿主的**子 Agent 工具集可能不含 `Skill`**——实测会提示：
+
+```
+Skill 未加载：会话工具集无 Skill 工具，academic-orchestrator:mm-self-review /
+academic-orchestrator:code-review 无法加载
+```
+
+而本插件所有 Agent 文档都写着"开工必须先 `skill("xxx")` 加载"。于是：
+- 子 Agent 被要求做一件**它做不到**的事；
+- 门禁只校验 `--skills` 里**声明的字符串**，无法分辨"真读过"还是"抄了个名字"；
+- 只能靠人工"按公开口径等价执行"，系统不该逼人这样兜底。
+
+### 解法：内容注入优先，Skill 工具为可选
+
+**所有子 Agent 都有 `Read`。** 所以把"加载 skill"从"必须调工具"改成"内容可达"：
+
+```bash
+# 1) 取正文（主 Agent 派发时注入 prompt，最省事）
+python scripts/skill_context.py --name mm-self-review,code-review --body-only
+
+# 2) 只取路径（子 Agent 自己 Read）
+python scripts/skill_context.py --name mm-self-review --path-only
+
+# 3) 排查"为什么加载不到"（遮蔽、未安装）
+python scripts/skill_context.py --name code-review --resolve-only
+```
+
+### 派发约定（主 Agent 必做）
+
+派发子 Agent 时，把本节点的 `must_load` 清单交给它，**二选一**：
+
+| 方式 | 做法 | 适用 |
+|---|---|---|
+| 注入正文（推荐） | 把 `--body-only` 输出贴进派发 prompt 的"评分/执行口径"段 | 子 Agent 无 Skill 工具，或希望零额外调用 |
+| 给路径 | 把 `--path-only` 结果写进 prompt，要求子 Agent 先 `Read` | 正文过长（>20KB）或需按需跳读 |
+
+### 子 Agent 约定
+
+- prompt 里有正文 → 直接用；
+- prompt 里只有路径 → 先 `Read` 再开工；
+- 两者都没有 → 自己执行 `skill_context.py --path-only` 拿到路径后 `Read`；
+- **确实拿不到**（脚本不可用且无正文）→ 按该 skill 的公开口径等价执行，并在产出开头
+  如实声明 `Skill 不可用；已按 <名> 的公开口径等价执行`，**不得假装加载过**，也**不得因此拒绝交付**。
+
+### 门禁如何校验（已落地）
+
+`state_utils.py node-review` / `round-score` 的 `--skills` 校验现在做两件事：
+1. 声明齐备（覆盖 reviewer 必读清单）；
+2. **内容可达**——每个必读 skill 必须能在磁盘解析到 `SKILL.md`（`skill_is_resolvable`）。
+解析不到就拒绝，并给出 `skill_context.py` 的排查与替代命令。
+这样"抄个名字"过不了门禁，"Skill 工具不可用"也不会让流程卡死。
+
 ## 支持的工作流
 
 ### 1. 数学建模全链路（9阶段）
@@ -761,6 +817,42 @@ python scripts/validate_data_lineage.py Data/data-lineage.json --root .
 | N8 评审 | reviewer | 终稿评审报告 | mm-self-review |
 
 委派必须与 `state/registry.json` 匹配；被调用 Agent 未声明已读配对 Skill 时，要求其补读后再交付。
+
+### 🔴 维度分工（防"一个 Agent 自评全部五维"）
+
+N4/N5 的五维评分里，有两类维度**证据来源本质不同**，由一个 Agent 全评会缺乏交叉验证：
+
+| 维度 | 本质 | 谁评 |
+|---|---|---|
+| correctness / efficiency / robustness | 要跑代码、看实测数据 | 主审阅者（mm-code-reviewer） |
+| **readability / innovation** | 看设计与新颖性，与"实现者视角"冲突最大 | **独立第二审阅者（reviewer）** |
+
+**怎么执行**（N4 为例，N5 只有 innovation 拆分）：
+
+```bash
+# ① 先派 reviewer 只评它负责的维度（不传 --total）
+python state/state_utils.py round-score N4 --round 1 \
+  --dims '{"readability":8,"innovation":7}' \
+  --judge reviewer --skills-read mm-self-review \
+  --evidence Code/main.py
+
+# ② 再派 mm-code-reviewer 给整体分（含它负责的三维）
+python state/state_utils.py round-score N4 --round 1 --total 8 \
+  --dims '{"correctness":8,"efficiency":8,"readability":8,"robustness":8,"innovation":7}' \
+  --judge mm-code-reviewer \
+  --skills-read mm-iteration-engine,mm-algorithm-dev,code-review \
+  --evidence Code/main.py
+```
+
+**约束**（已落地为机器校验，不是纸面规则）：
+- 分工审阅者**只能评分工内维度**，评越界维度会被拒；
+- 分工审阅者**不能给 --total**（整体分必须由主审阅者定）；
+- 分工审阅者的分数落 `rounds[].dimension_contributions`，供主审阅者汇总；
+- 分工审阅者只被要求读"判断"规范（mm-self-review），不继承代码审阅的执行规范。
+
+**不要过度派发**：只有 `DIMENSION_SPLIT` 声明的节点（当前 N4/N5）才拆。
+N1/N2/N3/N6 保持单人审阅——它们的维度没有这种证据来源冲突，多派只会增加成本。
+N6/N7/N8 的第二审阅者（mm-figure-table-benchmarker）是另一回事，那是 B1 专项门禁。
 
 ## 迭代循环执行协议（N4/N5 代码环、N7/N8 论文环）
 

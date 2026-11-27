@@ -113,6 +113,29 @@ REVIEW_GATE = {"N1": "M1", "N2": "D1", "N3": "P1", "N4": "P2", "N5": "T1", "N6":
 # 次要审阅者 → 其专属门禁（2.0.0）。B1 = 图表/表格文献对标门禁。
 SECONDARY_REVIEWER_GATE = {"mm-figure-table-benchmarker": "B1"}
 
+# 维度级审阅分工（防"同一 Agent 自评全部五维"造成的单一视角与相互污染）。
+#
+# 原则：**只在维度确实需要不同证据来源时才拆**，不做无差别多派（避免工程冗余）。
+#   · correctness / efficiency / robustness：要跑代码、看实测 → 留主审阅者
+#   · readability / innovation：看设计与新颖性，与实现者视角冲突最大
+#     → 由独立第二审阅者评，避免"自己写的代码自己说结构清晰、方法有创新"
+#
+# 只有声明了 DIMENSION_SPLIT 的节点才要求第二审阅者；其余保持单人审阅。
+DIMENSION_SPLIT = {
+    "N4": {
+        "agent": "reviewer",
+        "dimensions": ["readability", "innovation"],
+        "rationale": ("readability/innovation 属设计与判断类，与实现者视角冲突最大；"
+                      "correctness/efficiency/robustness 需实测运行证据，留在 mm-code-reviewer。"),
+    },
+    "N5": {
+        "agent": "reviewer",
+        "dimensions": ["innovation"],
+        "rationale": ("调优节点的创新性（方法改进是否有依据）应由非算法实现方判断；"
+                      "其余维度依赖调优实测数据。"),
+    },
+}
+
 UPSTREAM = {
     "N1": [("N0", "需求确认")], "N2": [("N1", "选题拆解")], "N3": [("N1", "选题拆解"), ("N2", "数据处理")],
     "N4": [("N3", "建模")], "N5": [("N4", "代码")], "N6": [("N4", "代码"), ("N5", "调优")],
@@ -239,16 +262,20 @@ def load_registry(root):
 
 
 def expected_reviewers(node):
-    """节点的全部合法审阅者：主 reviewer + secondary_reviewers（2.0.0）。
+    """节点的全部合法审阅者：主 reviewer + secondary_reviewers + 维度分工 agent。
 
-    secondary 用于「同一节点需要多个独立视角」的场景，例如 N6/N7/N8 除常规审阅外
-    还要由 mm-figure-table-benchmarker 出 B1（图表/表格文献对标）结论。
+    · secondary 用于「同一节点需要多个独立视角」（如 N6/N7/N8 的 B1 对标）；
+    · DIMENSION_SPLIT 里的 agent 是"只评指定维度"的第二审阅者
+      （如 N4 的 readability/innovation 由 reviewer 独立评，避免实现方自评结构优劣）。
     """
     info = NODES[node]
     out = []
     if info.get("reviewer"):
         out.append(info["reviewer"])
     out.extend(info.get("secondary_reviewers") or [])
+    split_agent = (DIMENSION_SPLIT.get(node) or {}).get("agent")
+    if split_agent and split_agent not in out:
+        out.append(split_agent)
     return out
 
 
@@ -313,24 +340,98 @@ REVIEWER_SKILLS = {
 }
 
 
+# 维度分工审阅者需要的规范（只判设计与创新，不判代码实现细节）。
+# 未列出的节点回退到 mm-self-review。
+DIMENSION_SPLIT_SKILLS = {
+    "N4": ["academic-orchestrator:mm-self-review"],
+    "N5": ["academic-orchestrator:mm-self-review"],
+}
+
+
 def reviewer_required_skills(node, agent=None):
     """某审阅者在本节点必须声明的 skill 清单。
 
     2.0.0：同一节点可能有多个审阅视角——
       - 主 reviewer：用 REVIEWER_SKILLS（"怎么判"的规范），**不再**沿用执行方 required_skills；
-      - secondary reviewer（如 mm-figure-table-benchmarker）：只需它自己的专项规范。
+      - secondary reviewer（如 mm-figure-table-benchmarker）：只需它自己的专项规范；
+      - **维度分工审阅者**（DIMENSION_SPLIT，如 N4 由 reviewer 评 readability/innovation）：
+        只需"判断设计与创新"的规范（mm-self-review），不需要代码审阅的执行规范——
+        否则分工就退化为主审阅者复读。
     P0-10：原实现对主 reviewer 返回 info["skills"]（执行方技能集），
     导致审阅者被要求声明 mm-visualization/mm-latex-writing 等执行规范，
     而 agent 文档里没写，按文档操作会被自己拒绝。
     """
     info = NODES[node]
+    main_reviewer = info.get("reviewer")
     secondaries = info.get("secondary_reviewers") or []
-    if agent and agent in secondaries and agent != info.get("reviewer"):
+    split_agent = (DIMENSION_SPLIT.get(node) or {}).get("agent")
+
+    if agent and agent == split_agent and agent != main_reviewer:
+        # 维度分工：只要求"审阅判断"规范，不要求执行/代码审阅规范
+        return DIMENSION_SPLIT_SKILLS.get(node) or ["academic-orchestrator:mm-self-review"]
+    if agent and agent in secondaries and agent != main_reviewer:
         return SECONDARY_REVIEWER_SKILLS.get(agent, [])
     return REVIEWER_SKILLS.get(node, info.get("skills", []))
 
 
-def require_review_skills(node, skills, agent=None):
+def skill_is_resolvable(skill, project=None):
+    """该 skill 能否在磁盘上找到（与宿主解析顺序一致：先命中者胜）。
+
+    返回 (bool, 路径或 None)。用于替代"依赖 Skill 工具"的可行性判断：
+    子 Agent 工具集可能不含 Skill（实测会报"会话工具集无 Skill 工具"），
+    但所有子 Agent 都有 Read，所以"内容可达"才是可靠判据。
+    """
+    bare = skill_basename(skill)
+    home = os.path.expanduser("~")
+    roots = [
+        os.path.join(home, ".zcode", "skills"),
+        os.path.join(home, ".agents", "skills"),
+        os.path.join(home, ".zcode", "skill-sources"),
+    ]
+    env_roots = os.environ.get("MM_SKILL_ROOTS")
+    if env_roots:
+        roots = [p for p in env_roots.split(os.pathsep) if p.strip()] + roots
+    plugin_root = os.environ.get("ZCODE_PLUGIN_ROOT")
+    if plugin_root:
+        roots.append(os.path.join(plugin_root, "skills"))
+    if project:
+        roots.extend([os.path.join(project, ".zcode", "skills"),
+                      os.path.join(project, ".agents", "skills")])
+    # 插件缓存：<cache>/<marketplace>/<plugin>/<version>/skills
+    cache = os.path.join(home, ".zcode", "cli", "plugins", "cache")
+    if os.path.isdir(cache):
+        for market in sorted(os.listdir(cache)):
+            mdir = os.path.join(cache, market)
+            if not os.path.isdir(mdir):
+                continue
+            for plugin in sorted(os.listdir(mdir)):
+                pdir = os.path.join(mdir, plugin)
+                if not os.path.isdir(pdir):
+                    continue
+                for ver in sorted(os.listdir(pdir)):
+                    sk = os.path.join(pdir, ver, "skills")
+                    if os.path.isdir(sk):
+                        roots.append(sk)
+    for root in roots:
+        for cand in (os.path.join(root, bare, "SKILL.md"),
+                     os.path.join(root, "skills", bare, "SKILL.md")):
+            if os.path.isfile(cand):
+                return True, cand
+    return False, None
+
+
+def require_review_skills(node, skills, agent=None, project=None):
+    """审阅前必读 skill 校验。
+
+    两件事分开做，不能混为"声明了字符串就放行"：
+      ① 声明齐备：--skills 必须覆盖 reviewer_required_skills 的清单；
+      ② **内容可达**：每个必读 skill 必须能在磁盘上解析到 SKILL.md。
+
+    ② 是针对真实故障加的：子 Agent 工具集可能不含 Skill，
+    `skill("mm-self-review")` 根本执行不了，此前门禁只查 ①，
+    于是"抄了个名字"就能过——门禁形同虚设。
+    现在补 ②：解析不到就拒绝，并按可用方式给出修复指引。
+    """
     declared = normalized_skill_set(skills.split(","))
     required_list = reviewer_required_skills(node, agent)
     missing_keys = normalized_skill_set(required_list) - declared
@@ -338,6 +439,23 @@ def require_review_skills(node, skills, agent=None):
         # 报告原始注册名（带插件前缀），便于直接复制到 --skills
         missing = [s for s in required_list if skill_basename(s) in missing_keys]
         sys.exit(f"[state_utils] 审阅前必读 Skill 未声明: {', '.join(missing)}")
+
+    # ② 内容可达性：声明了但磁盘上找不到 → 拒绝（防止"声明即通过"）
+    unresolved = []
+    for s in required_list:
+        ok, _ = skill_is_resolvable(s, project)
+        if not ok:
+            unresolved.append(s)
+    if unresolved:
+        sys.exit(
+            "[state_utils] 拒绝：以下必读 skill 声明了，但磁盘上解析不到 SKILL.md：\n  - "
+            + "\n  - ".join(unresolved)
+            + "\n  这说明 skill 未安装或被遮蔽（同名更高优先级副本覆盖）。\n"
+            "  排查：python scripts/skill_context.py --name <skill> --resolve-only\n"
+            "  若子 Agent 无 Skill 工具：改用内容注入\n"
+            "    python scripts/skill_context.py --name <skill> --body-only > 上下文.txt\n"
+            "    （主 Agent 把正文注入派发 prompt，子 Agent 只需 Read，无需 Skill 工具）"
+        )
 
 
 def save_state(root, state, bump=True):
@@ -759,4 +877,4 @@ def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
         f"  或显式传 --allow-missing-mcp 豁免（仅离线/人工特批，须在交付说明中留痕）。"
     )
 
-__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "require_data_lineage", "DATA_LINEAGE_FILE", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]
+__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "DIMENSION_SPLIT", "DIMENSION_SPLIT_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_is_resolvable", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "require_data_lineage", "DATA_LINEAGE_FILE", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]

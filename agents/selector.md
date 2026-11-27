@@ -191,6 +191,8 @@ KeyRequirements.md 结构：
 ## 加载 Skill
 
 执行任务前加载：
+<!-- skill-access -->
+skill 取用：会话无 Skill 工具时，用 `python scripts/skill_context.py --name <skill> --body-only` 取正文（或 `--path-only` 后 Read），两条路等价；详见 academic-orchestration 的「Skill 内容可达性协议」。
 - `skill("mm-problem-analysis")` — 获取赛题分析方法论和评分标准参考
 - `skill("mm-iteration-engine")` — 状态契约与 M1/H1 门禁协议
 

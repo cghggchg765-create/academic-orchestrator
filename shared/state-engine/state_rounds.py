@@ -182,18 +182,31 @@ def cmd_round_score(args):
     node = args.node
     scope_id = _round_scope_id(args)
     require_independent_reviewer(node, args.judge)
-    # P1-6：轮次评分只允许节点主审阅者（REVIEW_GATE 对应的那个），
-    # 不允许 secondary reviewer（如图表对标者）给论文/代码轮次打分——
+    # P1-6：轮次评分只允许节点主审阅者（REVIEW_GATE 对应的那个）提交整体分，
+    # 不允许 secondary reviewer（如图表对标者）给论文/代码轮次打整体分——
     # 否则可跳过 mm-latex-writing / mm-self-review 的评审口径。
+    #
+    # 例外（维度分工）：DIMENSION_SPLIT 声明的第二审阅者可提交**它负责的那几个维度**，
+    # 但不能给 --total（整体分仍由主审阅者定）。这样"readability/innovation 由独立方评"
+    # 才真正落地，又不会让第二审阅者接管整体判定。
     main_reviewer = NODES[node].get("reviewer")
-    if main_reviewer and args.judge != main_reviewer:
+    split = DIMENSION_SPLIT.get(node) or {}
+    split_agent = split.get("agent")
+    split_dims = set(split.get("dimensions") or [])
+    is_split_review = bool(split_agent) and args.judge == split_agent and split_agent != main_reviewer
+    if main_reviewer and args.judge != main_reviewer and not is_split_review:
+        hint = ""
+        if split_agent:
+            hint = (f"\n  若你是 {split_agent}，可只提交维度分工里属于你的维度："
+                    f"{sorted(split_dims)}（不传 --total）。")
         sys.exit(
             f"[state_utils] 拒绝：{node} 的轮次评分 judge 必须是主审阅者 {main_reviewer}，"
             f"实际为 {args.judge}。\n"
             f"  secondary reviewer（如 mm-figure-table-benchmarker）只通过 node-review "
-            f"登记其专项门禁（B1），不参与轮次五维评分。"
+            f"登记其专项门禁（B1），不参与轮次五维评分。" + hint
         )
-    require_review_skills(node, args.skills_read)
+    # 传 agent：分工审阅者只需读自己维度的规范，不能按主审阅者的清单要求它
+    require_review_skills(node, args.skills_read, agent=args.judge, project=root)
 
     try:
         dims = json.loads(args.dims)
@@ -221,8 +234,38 @@ def cmd_round_score(args):
     # 核心节点 MCP 必调：迭代每轮必须重新检索（禁止纯内生输出）——本轮无检索留痕则拒绝评分
     require_mcp_search_evidence(root, node, round_no=args.round,
                                 allow_flag=getattr(args, "allow_missing_mcp", False))
+    # 维度分工场景：第二审阅者只提交自己负责的维度，不传 --total。
+    # 校验：他提交的维度必须都在自己分工范围内，不能越界评别人的维度。
+    if is_split_review:
+        out_of_scope = set(dims) - split_dims
+        if out_of_scope:
+            sys.exit(
+                f"[state_utils] 拒绝：{args.judge} 在 {node} 只负责维度 {sorted(split_dims)}，"
+                f"不能评 {sorted(out_of_scope)}。\n"
+                f"  分工理由：{split.get('rationale', '')}\n"
+                f"  其余维度由主审阅者 {main_reviewer} 在整体评分中给出。"
+            )
+        # 记录到 round 的 dimension_contributions，供主审阅者汇总
+        contrib = target_round.setdefault("dimension_contributions", {})
+        contrib[args.judge] = {
+            "dimensions": dims,
+            "skills_read": [s.strip() for s in args.skills_read.split(",") if s.strip()],
+            "evidence": [s.strip() for s in (args.evidence or "").split(",") if s.strip()],
+            "timestamp": now_iso(),
+        }
+        save_state(root, state, bump=False)
+        print(json.dumps({"recorded": True, "node": node, "round": args.round,
+                          "judge": args.judge, "dimensions": dims,
+                          "note": "维度分工分已记录；整体分由主审阅者汇总后提交"},
+                         ensure_ascii=False, indent=2))
+        return
     if not isinstance(dims, dict) or not dims:
         sys.exit("[state_utils] --dims 必须是非空 JSON 对象")
+    if args.total is None:
+        sys.exit(
+            f"[state_utils] 主审阅者必须提供 --total（0-10 整体分）。\n"
+            f"  --total 只在维度分工的第二审阅者提交单项维度时可省略。"
+        )
     total = float(args.total)
     if not math.isfinite(total) or not 0 <= total <= 10:
         sys.exit("[state_utils] --total 必须是 0 到 10 之间的有限数")
