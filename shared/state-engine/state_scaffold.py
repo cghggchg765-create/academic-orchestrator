@@ -417,6 +417,10 @@ STANDARD_DIRS = [
     "ModelDocs",
     "SubmissionPackage",
     "Material/similar_papers", "Material/template",
+    # 外部资料隔离区（见 scripts/external_isolation.py）：
+    # 同行代码/方案/论文只允许落 External/refs/，与自有产物物理分开。
+    # 引用区受哈希锁定，改动会被 check 检出；转成自有产物须 derive 登记来源。
+    "External/refs",
     "LogRecord",
     "BackupArchive/draft-backup", "BackupArchive/mid-backup", "BackupArchive/final-backup",
     "DefenseMaterial/show-figures",
@@ -457,6 +461,106 @@ STANDARD_FILES = {
     "DefenseMaterial/defense-script.md",
     f"{STATE_DIR}/todo.md",
 }
+
+
+EXTERNAL_README = """# External/refs — 外部参考资料（只读）
+
+放同行的代码、方案、论文、模板等。这里的文件受哈希锁定保护，改动会被 check 检出。
+
+## 为什么需要这个目录
+
+外部资料**可读可用，但不能污染自有产物**：不能悄悄变成"我们写的代码"，
+不能残留在交付物里，也不能让子 Agent 把参考实现直接复制进来当成原创。
+把外部资料与自有产物物理分开，是唯一可靠的隔离方式。
+
+## 怎么用
+
+```bash
+# 纳入外部资料（自动哈希锁定）
+python scripts/external_isolation.py add path/to/peer_solution.py --root . --note "来源：XX 项目"
+
+# 校验只读区没被改过（删改增都会报 TAMPERED）
+python scripts/external_isolation.py check --root .
+
+# 把外部实现转成自有代码时登记来源
+python scripts/external_isolation.py derive \\
+  --ref External/refs/peer_solution.py \\
+  --target Code/problem_1/model.py \\
+  --note "参考其目标函数构造，按本问约束重写"
+
+# 扫描自有产物是否混入外部资料
+python scripts/external_isolation.py scan --root .
+```
+
+## 三条硬规则
+
+1. **外部资料只允许放在这里**。放进 `Code/` 等产物目录会被 scan 判为位置污染。
+2. **不要手改这里的文件**。需要更新用 `add --force` 重新纳入，保持哈希可追溯。
+3. **转成自有产物必须登记**。`derive` 一行，说明参考了什么、怎么改写的；
+   没登记的雷同会被判 HIGH（疑似直接复制），登记后降为 INFO（合规参考）。
+"""
+
+EXTERNAL_MARK = """此目录（External/refs/）是只读引用区。
+
+规则：
+  1. 外部资料（同行代码/方案/论文/模板）只允许放在这里，不得放进 Code/ 等产物目录。
+  2. 文件入库后由 refs.lock.json 哈希锁定；需要更新请用 add 重新纳入，不要手改。
+  3. 把外部内容转成自有产物时，用 derive 命令登记来源映射。
+  4. 子 Agent 可以读这里，但不得写入；引用后在产物中标注来源。
+
+校验：python scripts/external_isolation.py check --root .
+扫描污染：python scripts/external_isolation.py scan --root .
+"""
+
+
+def _tool_shim(fname):
+    """项目内 scripts/<tool>.py 的转发垫片。
+
+    真实实现只有一份（state/tools/<tool>.py），垫片只负责把 argv 转过去执行，
+    这样"改一处即全部生效"，不会出现两份实现漂移。
+    """
+    return (
+        '#!/usr/bin/env python3\n'
+        '# -*- coding: utf-8 -*-\n'
+        f'"""{fname} 转发入口。\n'
+        '\n'
+        '真实实现位于 state/tools/' + fname + '（由 init 从插件分发，唯一实现）。\n'
+        '本文件只是转发，使文档里的 `python scripts/' + fname + ' ...` 形式可直接使用。\n'
+        '不要在这里写业务逻辑——会被下次 init --sync-runtime 覆盖，且与唯一实现分叉。\n'
+        '"""\n'
+        'import os\n'
+        'import runpy\n'
+        'import sys\n'
+        '\n'
+        '_HERE = os.path.dirname(os.path.abspath(__file__))\n'
+        '_REAL = os.path.join(os.path.dirname(_HERE), "state", "tools", "' + fname + '")\n'
+        '\n'
+        'if not os.path.isfile(_REAL):\n'
+        '    sys.exit(f"[shim] 找不到真实实现: {_REAL}（请重新运行 init --sync-runtime）")\n'
+        '\n'
+        'if __name__ == "__main__":\n'
+        '    runpy.run_path(_REAL, run_name="__main__")\n'
+    )
+
+
+def _init_external_isolation(root):
+    """建外部资料隔离区：目录 + 只读说明 + 空锁定基线。
+
+    只建空目录不够——没有 README 就没人知道规则，没有锁定就无法检测篡改。
+    """
+    refs = os.path.join(root, "External", "refs")
+    os.makedirs(refs, exist_ok=True)
+    readme = os.path.join(refs, "README.md")
+    if not os.path.exists(readme):
+        save_text_atomic(readme, EXTERNAL_README)
+    mark = os.path.join(root, "External", ".readonly")
+    if not os.path.exists(mark):
+        save_text_atomic(mark, EXTERNAL_MARK)
+    lock = os.path.join(root, "External", "refs.lock.json")
+    if not os.path.exists(lock):
+        save_text_atomic(lock, json.dumps(
+            {"version": "1.0", "updated_at": now_iso(), "files": {}},
+            ensure_ascii=False, indent=2, sort_keys=True))
 
 
 def standard_files_content(name="", year="", problem="", language="zh"):
@@ -536,6 +640,9 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
     for q in range(1, 5):
         os.makedirs(os.path.join(root, f"Code/problem_{q}"), exist_ok=True)
     os.makedirs(os.path.join(root, "Code/visualization"), exist_ok=True)
+    # 外部资料隔离区：建目录 + 只读说明 + 锁定基线。
+    # 只建空目录不够——没有 README 就没人知道规则，没有锁定就没法检测篡改。
+    _init_external_isolation(root)
     # .gitkeep 目录清单从 STANDARD_DIRS 派生（单一事实源，禁止另写一份目录清单导致重复目录）
     gitkeep_dirs = [d for d in STANDARD_DIRS if d.endswith(("raw", "tables", "figures", "txt_result", "model_save",
                                                              "schematic", "curve", "heatmap", "comparison",
@@ -692,10 +799,13 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
 
     # P0-9：血缘校验器与 raw 锁定工具随项目分发，否则项目内 D1 永久 fail-closed
     # （文档规定的调用形式 `python state/state_utils.py node-review N2` 跑不通）。
+    # 外部资料隔离脚本同样必须随项目走：README 让用户跑 `python scripts/external_isolation.py`，
+    # 缺了它隔离机制在项目内等于不存在。
     repo_root = os.path.abspath(os.path.join(shared_src, ".."))
     scripts_src = os.path.join(repo_root, "scripts")
     tools_tgt = os.path.join(root, STATE_DIR, "tools")
-    for fname in ("validate_data_lineage.py", "raw_lock.py"):
+    for fname in ("validate_data_lineage.py", "raw_lock.py", "external_isolation.py",
+                  "code_structure_audit.py"):
         f_src = os.path.join(scripts_src, fname)
         if not os.path.isfile(f_src):
             continue
@@ -704,6 +814,19 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
         if force or sync_runtime or not os.path.exists(f_tgt):
             if os.path.abspath(f_src) != os.path.abspath(f_tgt):
                 shutil.copyfile(f_src, f_tgt)
+
+    # 项目内 scripts/ 转发入口：用户按文档跑 `python scripts/xxx.py` 时能直接命中。
+    # 转发而不是复制，保证 state/tools/ 是唯一实现（改一处即全部生效）。
+    project_scripts = os.path.join(root, "scripts")
+    os.makedirs(project_scripts, exist_ok=True)
+    for fname in ("validate_data_lineage.py", "raw_lock.py", "external_isolation.py",
+                  "code_structure_audit.py"):
+        if not os.path.isfile(os.path.join(tools_tgt, fname)):
+            continue
+        shim = os.path.join(project_scripts, fname)
+        if force or sync_runtime or not os.path.exists(shim):
+            if os.path.abspath(shim) != os.path.abspath(os.path.join(tools_tgt, fname)):
+                save_text_atomic(shim, _tool_shim(fname))
 
     refresh_dashboard(root)
 

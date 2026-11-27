@@ -35,6 +35,10 @@ metadata:
    [ESCALATE] 严重度=P0, 问题=需审批, 建议=请求主agent执行[审批]流程
 9. 🔴 状态统一节点铁律（数学建模流程）：你是 `state/decision_log.json` 的唯一写者；每次状态变更单独 git commit；每个节点执行完后必须派发配对审阅 Agent（见"审阅配对矩阵"）
 10. 🔴 MCP 集成铁律：任何建模任务开工前先过 Checkpoint 0（全局MCP扫描→筛选四类→内嵌确认→自检→放行）；核心节点强制必调对应 MCP（见"## MCP 集成铁律"节），禁止纯内生输出
+11. 🔴 外部资料隔离铁律：引入同行代码/方案/论文时，只允许放进 `External/refs/`（`python scripts/external_isolation.py add <文件>`），
+    **禁止直接放进 `Code/` `ReportPaper/` `ModelDocs/` 等产物目录**；把外部内容转成自有产物必须
+    `derive --ref <外部文件> --target <产物> --note "<怎么用的>"` 登记来源。
+    节点开工前跑 `python scripts/external_isolation.py scan --root .`，`CONTAMINATED` 时不得继续（详见"## 外部资料隔离协议"节）
 
 ## 角色定位
 
@@ -125,6 +129,63 @@ metadata:
 3. **调优 vs 结果分析**：竞赛模型迭代调优（基线/超参/敏感性）→ tuner；学术统计结果解读（p 值/效应量/置信区间）→ analyze；
 4. **排版 vs 质检**：格式统一修改 → typesetting；语法/编译错误检查 → latex_linter（只报告）；内容撰写 → writing；
 5. **学术设计 vs 竞赛建模**：学术论文大纲/研究方案 → design；竞赛数学模型公式/假设 → modeler；竞赛选题拆解 → selector。
+
+## 🔴 外部资料隔离协议（引入同行代码/方案/论文时必读）
+
+### 为什么需要
+
+开发中会引入同行的代码、方案、论文、模板。这些资料**必须可读可用**（吸收优秀经验），
+但**不能污染自有产物**：不能悄悄变成"我们写的代码"，不能残留在交付物里，
+也不能让子 Agent 把参考实现原样复制进来当成原创。
+
+技术现实：所有子 Agent 都有 `Bash` + `Edit`，**无法在技术上阻止读取**。
+因此隔离必须是"**可以检测**"而不是"可以阻止"——靠物理分区 + 哈希锁定 + 内容比对。
+
+### 三层结构
+
+| 层 | 位置 | 规则 |
+|---|---|---|
+| 只读引用区 | `External/refs/` | 外部资料**只允许**放这里。入库即哈希锁定（`External/refs.lock.json`），任何增删改都会被 `check` 判 `TAMPERED` |
+| 派生登记 | `External/derived.jsonl` | 把外部内容转成自有产物时必须登记一行来源映射，保证"哪段有外部来源"永远可追溯 |
+| 自有产物区 | `Code/` `ReportPaper/` `ModelDocs/` `ResultFigures/` `SubmissionPackage/` | 只放我们自己产生的东西。外部资料混入即判位置污染 |
+
+### 四条操作规则
+
+```bash
+# 1) 引入外部资料（唯一入口）
+python scripts/external_isolation.py add path/to/peer.py --root . --note "来源：XX 项目/论文"
+
+# 2) 校验只读区没被改过（删/改/私加都报 TAMPERED）
+python scripts/external_isolation.py check --root .
+
+# 3) 转成自有产物时登记来源
+python scripts/external_isolation.py derive \
+  --ref External/refs/peer.py --target Code/problem_1/model.py \
+  --note "参考其目标函数构造，按本问约束重写" --node N4
+
+# 4) 开工前扫描污染
+python scripts/external_isolation.py scan --root .
+```
+
+### 门禁接入
+
+- **节点开工前**（`node-start` 之后、派发执行 Agent 之前）必须跑 `scan`；`CONTAMINATED` 时不得继续。
+- **N4/N5 收工前**：`scan` 必须 `CLEAN`，否则 `mm-code-reviewer` 的可读性维度按 ≤5 封顶。
+- **N7/N8 收工前**：`scan` 必须 `CLEAN`，且所有"参考过的外部实现"都要有对应 `derive` 登记。
+- **交付前**（N8）：`External/` 不进 `SubmissionPackage/`；论文里引用外部实现须在参考文献或致谢中标注。
+
+### 判据口径（防误报）
+
+- 内容比对只看**超过 12 行**的文件（短文件如 `import` 语句必然雷同，比对无意义）。
+- 用 6 行滑窗 n-gram 重合率，≥60% 判"疑似复制"。
+- **已 `derive` 登记的雷同降级为 INFO**（视为合规参考）；未登记才是 HIGH。
+- 位置污染按**文件名**判定，不受行数门槛限制。
+
+### 与 `Material/` 的区别
+
+`Material/`（`similar_papers` / `template`）是**赛题材料与自有笔记**，属于项目资产；
+`External/refs/` 是**第三方成果**，需要来源追踪与污染防护。两者不要混用：
+第三方代码/方案一律进 `External/refs/`。
 
 ## 支持的工作流
 

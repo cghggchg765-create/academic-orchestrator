@@ -26,7 +26,7 @@ Help the user complete competition-problem understanding, dependency-aware decom
 - Read [knowledge/paper-writing.md](knowledge/paper-writing.md) when drafting the paper or abstract.
 - Read [knowledge/corpus-analysis.md](knowledge/corpus-analysis.md) for observed case/model/validation distributions and representative case links; treat counts as retrieval clues, never as proof of superiority.
 - Read [references/corpus-provenance.md](references/corpus-provenance.md) only when auditing corpus coverage, source files, OCR limitations, duplicate handling, or copyright boundaries.
-- Retrieve historical cases with `python scripts/search_cases.py "<problem description>" --top 6`. Read the returned cards in `cases/`; do not load all cards.
+- Retrieve historical cases with `python state/state_utils.py case-search "<problem description>" --top 6`. Read the returned cards in `cases/`; do not load all cards.
 
 ## Workflow
 

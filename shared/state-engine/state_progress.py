@@ -34,6 +34,12 @@ ORPHAN_REPORT = os.path.join(STATE_DIR, "reports", "orphan-files.json")
 IGNORE_TOP = {
     ".git", ".venv", "venv", "__pycache__", ".pytest_cache", "node_modules",
     "state", "Material", "BackupArchive", ".zcode", ".agents", ".github",
+    # External/ 是只读引用区（第三方资料 + 锁定基线），由 external_isolation 单独管理，
+    # 不属于"节点应产出的内容"，不能算孤儿文件。
+    "External",
+    # scripts/ 是 init 分发的工具转发垫片（external_isolation / raw_lock / 结构审计等），
+    # 属运行时基础设施，同样不是孤儿。
+    "scripts",
 }
 IGNORE_SUFFIX = {".pyc", ".pyo", ".aux", ".log", ".out", ".toc", ".bbl", ".blg",
                  ".synctex.gz", ".fls", ".fdb_latexmk", ".xdv", ".lof", ".lot"}

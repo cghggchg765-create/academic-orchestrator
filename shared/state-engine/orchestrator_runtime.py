@@ -236,7 +236,14 @@ SCAFFOLD_FILES = {
     "SubmissionPackage/README-提交说明.txt", "SubmissionPackage/参赛提交清单.md",
     "DefenseMaterial/defense-script.md",
 }
-IGNORED_PARTS = {".git", "state", "LogRecord", "__pycache__", ".venv", "build", "Code/output"}
+IGNORED_PARTS = {".git", "state", "LogRecord", "__pycache__", ".venv", "build", "Code/output",
+                 # External/ 是只读引用区（第三方成果，受哈希锁定），不属于"待整理赛题材料"：
+                 # 把它算进 material_intake 会要求 AI 去"整理"别人的论文/代码并登记为自有材料，
+                 # 既混淆来源也违反隔离设计。它由 external_isolation 单独管理。
+                 "External",
+                 # scripts/ 是 init 分发的工具转发垫片（external_isolation / raw_lock 等），
+                 # 属于运行时基础设施，不是用户带来的"已有代码材料"。
+                 "scripts"}
 
 
 def detect_existing_materials(project: str | Path) -> dict[str, Any]:

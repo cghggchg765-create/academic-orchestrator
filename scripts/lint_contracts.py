@@ -263,6 +263,37 @@ def check_documented_commands_exist() -> None:
                     rel = path.relative_to(ROOT)
                     error(f"{rel}:{line_no} 引用了不存在的子命令 `{cmd}`（state_utils.py 无此命令）")
 
+    # 同时校验文档里 `python scripts/<x>.py` 形式的引用是否真实存在。
+    # 与命令检查同源动机：文档让用户跑一个不存在的脚本，等于机制不存在。
+    #
+    # 路径解析有两种合法基准，必须都认，否则会误报：
+    #   ① 仓库根：`python scripts/external_isolation.py`（项目级工具）
+    #   ② 所在 skill 目录：`python scripts/doctor.py`（该 skill 自带的脚本，
+    #      文档里写成相对自身目录的形式，如 skills/figure-pipeline/SKILL.md）
+    script_pattern = _re.compile(r"python (scripts/[A-Za-z0-9_\-]+\.py)")
+    for target in scan:
+        files = [target] if target.is_file() else [
+            p for p in target.rglob("*.md") if ".venv" not in str(p)]
+        for path in files:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for m in script_pattern.finditer(text):
+                rel_script = m.group(1)
+                if (ROOT / rel_script).is_file():
+                    continue
+                # 基准②：从文档所在目录向上找，看是否有匹配的 scripts/<x>.py
+                name = Path(rel_script).name
+                found = any((parent / "scripts" / name).is_file()
+                            for parent in [path.parent, *path.parent.parents]
+                            if parent.is_relative_to(ROOT))
+                if found:
+                    continue
+                line_no = text[:m.start()].count("\n") + 1
+                rel = path.relative_to(ROOT)
+                error(f"{rel}:{line_no} 引用了不存在的脚本 `{rel_script}`"
+                      f"（仓库根与所在 skill 目录下都没有）")
+
 
 def check_naming_redlines() -> None:
     """命名红线（回归防护）：状态目录必须为 state；标准文件名不允许下划线或数字前缀。

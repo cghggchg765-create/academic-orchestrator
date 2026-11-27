@@ -81,6 +81,24 @@ python scripts/code_structure_audit.py --root <项目根> --json
 | 仅 `role_overlap` / `version_dir` 告警 | ≤ 7 |
 | 零 FAIL 零 WARN | 才可按 8-10 区间评分 |
 
+### 污染检查（与可读性并列的硬前置）
+
+评分前还必须跑：
+
+```bash
+python scripts/external_isolation.py scan --root <项目根>
+```
+
+| scan 结果 | 处置 |
+|---|---|
+| `CLEAN` | 正常评分 |
+| `CONTAMINATED` + `content_copy`（未登记复制） | readability ≤ 5，且必须在 feedback 中列出涉及文件，要求作者要么重写要么补 `derive` 登记 |
+| `CONTAMINATED` + `location_contamination`（外部资料进了产物目录） | readability ≤ 4，P1 级问题：把文件移回 `External/refs/` |
+| `CONTAMINATED` + 其他 | 按"未说明来源"处理，readability ≤ 6 |
+
+判据来源：`skills/academic-orchestration/SKILL.md` 的"外部资料隔离协议"。
+`derive` 登记过的雷同是 INFO（合规参考），不扣分——**规则鼓励参考，只禁止不声明**。
+
 判据来源：`skills/mm-algorithm-dev/SKILL.md` 的"拆分的判断标准"。
 如果作者声称"不拆分有理由"（如单一算法长实现），理由必须写在 `Code/README-Code.md`
 的"结构决策"小节，否则按上表硬扣。
