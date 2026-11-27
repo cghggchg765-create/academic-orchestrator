@@ -241,6 +241,8 @@ maxTurns: 50
 ##### 落盘动作（缺一不可）
 
 1. 写 `state/agents/reviewer/result.json`：`{agent, node, round, read_skills, score{total, dimensions}, hard_caps_applied, verdict, issues[], feedback, timestamp}`。
+   - 若曾收到主 Agent 的 `[纠正]` 消息，**必须**补 `corrections_ack: [{correction_id, note, implemented_artifacts}]`；
+     字段定义与回执协议见 `skills/academic-orchestration/SKILL.md` §D 与 `spec/result.schema.json`（未填 → A3 判 `CORRECTION_UNACKED`）。
 2. 执行（或请 orchestrator 执行）：
    ```
    python state/state_utils.py node-review <N7|N8> --agent reviewer --result <PASS|FAIL> --skills "mm-iteration-engine,mm-latex-writing,mm-self-review" --summary "<综合分与关键问题>"

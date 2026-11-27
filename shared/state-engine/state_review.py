@@ -3,6 +3,103 @@ from state_defs import *  # noqa: F401,F403
 from state_scaffold import *  # noqa: F401,F403
 from state_audit import *  # noqa: F401,F403
 
+def require_correction_closure(root, node, gate_id):
+    """纠正留痕闭环校验（CORRECTION_UNACKED）——A3/B1 门禁的真实执行者。
+
+    文档承诺（skills/academic-orchestration/SKILL.md「D. 纠偏留痕」+ gates-registry A3/B1 判据）：
+    某节点发生过纠正，则必须存在对应回执，否则 A3 不得 PASS。此前这条门禁只有文档、没有代码，
+    这里补上机器校验，并做四层防伪造：
+
+      ① 逐条配对：按 correction_id 匹配回执，一条回执不能抵多条纠正；
+      ② 同一 agent：回执的 agent_id 必须等于纠正记录的 agent_id（主 Agent 代签无效）；
+      ③ 时间不可倒置：回执时间不得早于纠正时间；
+      ④ 账本不可篡改：corrections/acks 两份 JSONL 的哈希链必须连续，断裂即判
+         CORRECTION_LEDGER_TAMPERED（防止事后删掉"未回执"的纠正记录来骗门禁）。
+
+    A3（N8 终审）查全项目；B1（图表对标）只查当前节点——B1 在 N6/N7/N8 都可触发，
+    不能拿别的节点的回执顶替。
+    """
+    from state_events import summarize_corrections, unacked_corrections
+
+    scope_node = None if gate_id == "A3" else node
+    summary = summarize_corrections(root, node=scope_node)
+    if not summary["chain"]["intact"]:
+        chain = summary["chain"]
+        sys.exit(
+            f"[state_utils] 🔴 拒绝 {gate_id} PASS：纠正留痕账本哈希链断裂"
+            f"（corrections={chain['corrections']['broken_at']}, "
+            f"acks={chain['acks']['broken_at']}）——判 CORRECTION_LEDGER_TAMPERED。\n"
+            f"  说明纠正记录或回执被事后改写/删除；门禁不能建立在被篡改的留痕上。\n"
+            f"  处置：恢复被改动的记录，或由主 Agent 重新登记纠正并重收回执。"
+        )
+    unacked = unacked_corrections(root, node=scope_node)
+    if not unacked:
+        scope = "全项目" if scope_node is None else f"节点 {scope_node}"
+        if summary["total"]:
+            print(f"[state_utils] 纠正留痕闭环通过（{scope}：{summary['total']} 条纠正均已回执）")
+        return
+    detail = []
+    for corr in unacked[:10]:
+        detail.append(
+            f"  - {corr.get('correction_id')} node={corr.get('node')} "
+            f"agent={corr.get('agent_id')} round={corr.get('round') or '-'} "
+            f"type={corr.get('type')} delivery={corr.get('delivery')}\n"
+            f"      要求: {str(corr.get('requirement') or '')[:100]}"
+        )
+    scope = "全项目" if scope_node is None else f"节点 {scope_node}"
+    sys.exit(
+        f"[state_utils] 🔴 拒绝 {gate_id} PASS：CORRECTION_UNACKED（{scope} 有 "
+        f"{len(unacked)} 条纠正未收到对应 Agent 的回执）。\n"
+        + "\n".join(detail)
+        + ("\n  …" if len(unacked) > 10 else "")
+        + "\n  门禁判据：纠正留痕闭环（gates-registry " + gate_id + "）——发生过纠正就必须有同一 "
+          "agent_id 的回执，否则不能判定「纠正已生效」。\n"
+          "  收口方式：子 Agent 本人执行\n"
+          "    python state/state_utils.py correction-ack <correction_id> --agent <agent_id> "
+          "--note \"<如何落实>\"\n"
+          "  主 Agent 代签无效（agent_id 必须与纠正记录一致）。"
+    )
+
+
+BENCHMARK_DIMS = ("data_columns", "statistics", "units", "comparability",
+                  "grouping", "chart_fit", "academic_form")
+BENCHMARK_VERDICTS = {"COMPLETE", "GAP_MINOR", "GAP_MAJOR", "BLOCKED"}
+
+
+def _validate_benchmark_manually(data):
+    """jsonschema 不可用时的等效手检（B1）。
+
+    只覆盖"能被绕过"的关键点：entries 结构、七维齐全且每维有 state/evidence、
+    verdict 枚举合法。宁可比 schema 松，也不能比它松到让空壳矩阵过关。
+    """
+    entries = data.get("entries") or []
+    problems = []
+    for idx, entry in enumerate(entries):
+        entry = entry or {}
+        tag = entry.get("artifact_id") or f"entries[{idx}]"
+        for key in ("artifact_id", "artifact_kind", "supported_claim", "verdict"):
+            if not entry.get(key):
+                problems.append(f"{tag} 缺 {key}")
+        if entry.get("verdict") and entry["verdict"] not in BENCHMARK_VERDICTS:
+            problems.append(f"{tag} verdict={entry['verdict']} 非法")
+        dims = entry.get("dimensions") or {}
+        for dim in BENCHMARK_DIMS:
+            node_dim = dims.get(dim)
+            if not isinstance(node_dim, dict):
+                problems.append(f"{tag} 缺维度 {dim}")
+            elif not node_dim.get("state"):
+                problems.append(f"{tag}.{dim} 缺 state")
+            elif not node_dim.get("evidence"):
+                problems.append(f"{tag}.{dim} 缺 evidence（无证据的判定视为未判定）")
+        if not (entry.get("benchmarked") or []):
+            problems.append(f"{tag} 缺 benchmarked（至少要有一篇同行论文）")
+    if problems:
+        sys.exit("[state_utils] 拒绝 B1 PASS：对标矩阵结构不完整（jsonschema 不可用，已做等效手检）：\n  - "
+                 + "\n  - ".join(problems[:10])
+                 + ("\n  …" if len(problems) > 10 else "")
+                 + "\n  完整格式见 skills/figure-table-benchmark/references/benchmark-matrix.schema.json")
+
+
 def require_b1_evidence(root, node, agent, evidence):
     """B1 门禁专项校验（P1-2）。
 
@@ -41,18 +138,53 @@ def require_b1_evidence(root, node, agent, evidence):
     entries = data.get("entries") or []
     if not entries:
         sys.exit(f"[state_utils] 拒绝 B1 PASS：矩阵 {os.path.basename(latest)} 的 entries 为空。")
+    # P0-6：矩阵节点必须与本节点一致（N6 的 B1 不能顶替 N7/N8 的对标要求）
+    m_node = data.get("node")
+    if m_node and m_node != node:
+        sys.exit(f"[state_utils] 拒绝 B1 PASS：矩阵 node={m_node} 与当前节点 {node} 不符。\n"
+                 f"  N6/N7/N8 各自需要针对本节点产物的对标矩阵。")
+    # P0-6：用 benchmark-matrix.schema.json 做结构校验（原先只看 verdict 与篇数）
+    schema_path = None
+    here = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    for cand in (os.path.join(here, "skills", "figure-table-benchmark", "references",
+                              "benchmark-matrix.schema.json"),):
+        if os.path.isfile(cand):
+            schema_path = cand
+            break
+    if schema_path:
+        try:
+            import jsonschema
+            jsonschema.Draft202012Validator(
+                json.loads(open(schema_path, encoding="utf-8").read())).validate(data)
+        except ImportError:
+            # 无 jsonschema 时不能静默放行：下方逐条手检只覆盖 verdict/benchmarked，
+            # 不查七维 dimensions——一份"verdict=COMPLETE 但七维全空"的矩阵会蒙混过关。
+            # 这里补做与 schema 等效的关键字段检查。
+            _validate_benchmark_manually(data)
+        except jsonschema.ValidationError as exc:
+            loc = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+            sys.exit(f"[state_utils] 拒绝 B1 PASS：矩阵结构不符（{loc}）：{exc.message[:160]}")
+        except (OSError, json.JSONDecodeError):
+            pass
     bad = []
     for e in entries:
-        verdict = (e or {}).get("verdict")
+        e = e or {}
+        verdict = e.get("verdict")
         if verdict in {"GAP_MAJOR", "BLOCKED"}:
             bad.append(f"{e.get('artifact_id', '?')}={verdict}")
         elif not verdict:
             bad.append(f"{e.get('artifact_id', '?')}=<缺 verdict>")
+        # 每篇对标必须带 locator 与 channel（否则无法复核，等于编造）
+        for i, b in enumerate(e.get("benchmarked") or []):
+            b = b or {}
+            missing = [k for k in ("paper_id", "year", "locator", "channel") if not b.get(k)]
+            if missing:
+                bad.append(f"{e.get('artifact_id','?')}.benchmarked[{i}] 缺 {missing}")
     if bad:
-        sys.exit("[state_utils] 拒绝 B1 PASS：存在未达标的对标条目："
+        sys.exit("[state_utils] 拒绝 B1 PASS：存在未达标或不可核对的条目："
                  + ", ".join(bad[:8])
                  + ("…" if len(bad) > 8 else "")
-                 + "\n  先回传 visualization/writing 补齐，再重新对标。")
+                 + "\n  每条对标必须给 paper_id/year/locator/channel，否则视为编造。")
     # 对标论文数（可选字段）：不足 3 篇不给 PASS
     for e in entries:
         n = len((e or {}).get("benchmarked") or [])
@@ -70,8 +202,6 @@ def cmd_node_review(args):
     require_independent_reviewer(node, args.agent)
     require_review_skills(node, args.skills, agent=args.agent)
     # 防审阅偷懒：FAIL/BLOCKED 必须附证据路径（evidence）
-    if args.result in {"FAIL", "BLOCKED"} and not (args.evidence or "").strip():
-        sys.exit(f"[state_utils] {args.result} 审阅必须提供 --evidence（证据路径，防走过场）")
     # 核心节点 MCP 必调（N1/N3/N4/N5/N7）：PASS 审阅前校验检索留痕，禁止纯内生输出
     if args.result == "PASS":
         require_mcp_search_evidence(root, node, round_no=None,
@@ -79,6 +209,17 @@ def cmd_node_review(args):
         # N2 数据血缘强制（2.0.0）：D1 放行前必须能交叉检验处理内容/过程/结果
         require_data_lineage(root, node,
                              allow_flag=getattr(args, "allow_missing_lineage", False))
+    # P0-5：PASS 也必须附**真实存在**的证据。原先只有 FAIL/BLOCKED 要求 --evidence，
+    # 于是 `--evidence /nonexistent/FAKE.md` 乃至完全省略都能通过门禁，审计无法区分真伪。
+    # 顺序：先做业务校验（MCP/血缘），最后校验证据文件存在——否则业务错误会被证据错误掩盖。
+    if args.result in {"FAIL", "BLOCKED", "PASS"}:
+        ev = (args.evidence or "").strip()
+        if not ev:
+            sys.exit(f"[state_utils] {args.result} 审阅必须提供 --evidence（证据路径）")
+        ev_path = ev if os.path.isabs(ev) else os.path.join(root, ev)
+        if not os.path.exists(ev_path):
+            sys.exit(f"[state_utils] 证据文件不存在: {ev}\n"
+                     f"  审阅结论必须绑定可核对的实际产物（文件/目录），不接受路径占位。")
     skills = ",".join(s.strip() for s in args.skills.split(","))
     summary = args.summary or ""
     evidence = args.evidence or "-"
@@ -92,6 +233,10 @@ def cmd_node_review(args):
         gate_id = SECONDARY_REVIEWER_GATE.get(args.agent)
     else:
         gate_id = REVIEW_GATE.get(node)
+    # 2.0.0 纠正留痕闭环：A3 终审与 B1 对标 PASS 前，该节点（A3 为全项目）的每条纠正必须有回执，
+    # 否则判 CORRECTION_UNACKED。此前该门禁只有文档承诺，没有任何机器校验（纸面门禁）。
+    if gate_id in {"A3", "B1"} and args.result == "PASS":
+        require_correction_closure(root, node, gate_id)
     # P1-2：B1 的 PASS 必须有实测对标矩阵支撑，不能只靠声明的 skills。
     if gate_id == "B1" and args.result == "PASS":
         require_b1_evidence(root, node, args.agent, args.evidence or "")

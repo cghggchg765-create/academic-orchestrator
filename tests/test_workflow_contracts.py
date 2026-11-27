@@ -87,6 +87,31 @@ class WorkflowContractsTest(unittest.TestCase):
                 argv.append("--allow-empty-artifacts")
             if "--allow-no-checkpoint" not in argv:
                 argv.append("--allow-no-checkpoint")
+        if argv and argv[0] in ("node-finish", "round-start", "round-decide", "result-ingest"):
+            # 状态机流转用例不搭建上游链/开工快照；
+            # 上游守卫与"未 node-start 拒绝收工"由 test_v2_gates 的分阶段用例覆盖。
+            if "--skip-prereq" not in argv:
+                argv.append("--skip-prereq")
+        # P0-5：PASS/BLOCKED/FAIL 审阅都必须绑定真实存在的证据文件。
+        # 本文件用例验证门禁接线，不验证证据内容，故对 PASS 统一补真实占位证据；
+        # FAIL/BLOCKED 不补——"FAIL 无证据被拒"本身就是用例要断言的行为。
+        if (argv and argv[0] == "node-review" and "--evidence" not in argv
+                and "PASS" in argv):
+            ev = self.project / "state" / "reports" / "test-evidence.md"
+            ev.parent.mkdir(parents=True, exist_ok=True)
+            if not ev.exists():
+                ev.write_text("# 测试证据占位\n", encoding="utf-8")
+            argv.extend(["--evidence", "state/reports/test-evidence.md"])
+        # 用例里写的证据路径是"业务产物"占位；本文件不真正产出它们，故落成占位文件，
+        # 使 P0-5 的"证据必须存在"校验不误判。该校验本身由 test_v2_gates 专门覆盖。
+        if argv and argv[0] == "node-review" and "--evidence" in argv:
+            idx = argv.index("--evidence")
+            if idx + 1 < len(argv):
+                rel = argv[idx + 1]
+                target = self.project / rel
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(f"# 证据占位（{rel}）\n", encoding="utf-8")
         return subprocess.run(["python", str(STATE), *argv], text=True, capture_output=True,
                               check=check, env=env)
 
@@ -405,7 +430,8 @@ class WorkflowContractsTest(unittest.TestCase):
         """每次迭代的独立审阅/决策报告自动留存到 state/reports/ 并可查询。"""
         self.lock_problem()
         self.run_state("round-start", "N4", "--dir", str(self.project))
-        self.run_state("round-score", "N4", "--round", "1", "--total", "7.5", "--dims", '{"correctness":8,"efficiency":7}',
+        self.run_state("round-score", "N4", "--round", "1", "--total", "7.5",
+                       "--dims", '{"correctness":8,"efficiency":7,"readability":7,"robustness":8,"innovation":8}',
                        "--judge", "mm-code-reviewer", "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
                        "--evidence", "Code/output/run.json", "--dir", str(self.project))
         self.run_state("round-decide", "N4", "--round", "1", "--feedback", "可继续优化", "--dir", str(self.project))
@@ -903,13 +929,13 @@ class WorkflowContractsTest(unittest.TestCase):
         self.run_state("node-start", "N5", "--dir", str(self.project))
         self.run_state("round-start", "N5", "--dir", str(self.project))
         self.run_state("round-score", "N5", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
-                       "--skills-read", "academic-orchestrator:mm-model-tuning,academic-orchestrator:mm-iteration-engine",
+                       "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review,academic-orchestrator:mm-model-tuning",
                        "--evidence", "ModelDocs/sensitivity-analysis.md",
                        "--dims", '{"correctness":8,"efficiency":8,"readability":8,"robustness":8,"innovation":8}',
                        "--dir", str(self.project))
         self.run_state("round-decide", "N5", "--round", "1", "--dir", str(self.project))
         self.run_state("node-review", "N5", "--agent", "mm-code-reviewer", "--result", "PASS",
-                       "--skills", "academic-orchestrator:mm-model-tuning,academic-orchestrator:mm-iteration-engine",
+                       "--skills", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review,academic-orchestrator:mm-model-tuning",
                        "--summary", "ok", "--evidence", "ModelDocs/sensitivity-analysis.md", "--dir", str(self.project))
         # N6 非迭代节点：node-finish + node-review（V1）
         self.run_state("node-start", "N6", "--dir", str(self.project))
@@ -1008,6 +1034,221 @@ class WorkflowContractsTest(unittest.TestCase):
         self.run_guard("figures-read", "--project", str(self.project), "--mode", "vision")
         r = self.run_guard("verify", "--project", str(self.project))
         self.assertEqual(r.returncode, 0)
+
+
+class AppendSafetyRegressionTest(unittest.TestCase):
+    """并发追加与损坏数据回归（P1 数据风险）。
+
+    这些用例直接调用引擎模块，不经过 CLI，避免把进程启动开销算进并发窗口。
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="mm_append_"))
+        import sys as _sys
+        _sys.path.insert(0, str(ROOT / "shared" / "state-engine"))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_gate_events_chain_survives_concurrent_appends(self):
+        """并发写门禁事件后哈希链必须完整，且一条都不能丢。
+
+        原实现是"读全量→拼接→整文件替换"，并发时后写者用旧快照盖掉前者，
+        且 prev_hash 在锁外读取 → 链分叉。两条都必须在同一把锁内完成。
+        """
+        import threading
+        sys_path = str(ROOT / "shared" / "state-engine")
+        import importlib
+        if sys_path not in os.sys.path:
+            os.sys.path.insert(0, sys_path)
+        se = importlib.import_module("state_events")
+        root = str(self.tmp)
+        errors = []
+
+        def worker(i):
+            try:
+                se.record_gate_change(root, f"G{i}", "pending", "PASS", f"agent{i}",
+                                      source_cmd="regression")
+            except Exception as exc:  # noqa: BLE001
+                errors.append(repr(exc))
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(24)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [], f"并发写入不应报错: {errors[:3]}")
+        chain = se.verify_chain(root)
+        self.assertTrue(chain["intact"], f"哈希链断裂: {chain}")
+        self.assertEqual(chain["count"], 24, f"事件条数丢失: {chain}")
+
+    def test_checkpoint_seq_unique_under_concurrency(self):
+        """并发 checkpoint 的 seq 必须唯一递增，否则续跑无法判断最新快照。"""
+        import importlib
+        sys_path = str(ROOT / "shared" / "state-engine")
+        if sys_path not in os.sys.path:
+            os.sys.path.insert(0, sys_path)
+        sp = importlib.import_module("state_progress")
+        path = str(self.tmp / "N4.jsonl")
+        errors = []
+
+        def worker(i):
+            try:
+                sp._append_jsonl_locked(path, {"node": "N4", "phase": f"P{i}"}, next_seq=True)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(repr(exc))
+
+        threads = [__import__("threading").Thread(target=worker, args=(i,)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [], f"并发追加不应报错: {errors[:3]}")
+        records, corrupt = sp._read_jsonl(path)
+        self.assertEqual(corrupt, 0)
+        seqs = [r["seq"] for r in records]
+        self.assertEqual(len(seqs), 20, "行数丢失")
+        self.assertEqual(sorted(seqs), list(range(1, 21)), f"seq 不唯一/不连续: {sorted(seqs)}")
+
+    def test_non_dict_jsonl_lines_are_counted_as_corrupt(self):
+        """JSONL 里的裸标量/数组不能被当作合法记录放进 archive（后续 .get 会崩）。"""
+        import importlib
+        sys_path = str(ROOT / "shared" / "state-engine")
+        if sys_path not in os.sys.path:
+            os.sys.path.insert(0, sys_path)
+        sp = importlib.import_module("state_progress")
+        path = self.tmp / "N4.jsonl"
+        path.write_text('{"seq": 1}\n42\n[1,2]\n"str"\n', encoding="utf-8")
+        records, corrupt = sp._read_jsonl(str(path))
+        self.assertEqual([r.get("seq") for r in records], [1])
+        self.assertEqual(corrupt, 3, "裸标量/数组应计入 corrupt_lines")
+
+    def test_corrupt_registry_is_not_silently_reset(self):
+        """产物台账损坏时必须拒绝写入，不能静默重置丢掉全部历史哈希基线。"""
+        import importlib
+        sys_path = str(ROOT / "shared" / "state-engine")
+        if sys_path not in os.sys.path:
+            os.sys.path.insert(0, sys_path)
+        sp = importlib.import_module("state_progress")
+        reg = self.tmp / "state" / "reports" / "artifacts-registry.json"
+        reg.parent.mkdir(parents=True, exist_ok=True)
+        broken = '{"artifacts": [{"path": "Data/old.csv"}'
+        reg.write_text(broken, encoding="utf-8")
+        (self.tmp / "Data" / "raw").mkdir(parents=True, exist_ok=True)
+        (self.tmp / "Data" / "raw" / "new.csv").write_text("a\n1\n", encoding="utf-8")
+
+        class Args:
+            dir = str(self.tmp)
+            node = "N2"
+            path = "Data/raw/new.csv"
+            kind = "dataset"
+            note = ""
+            by = "tester"
+
+        with self.assertRaises(SystemExit) as ctx:
+            sp.cmd_register_artifact(Args())
+        self.assertIn("损坏", str(ctx.exception.code))
+        self.assertEqual(reg.read_text(encoding="utf-8"), broken, "损坏台账必须原样保留供人工修复")
+
+
+class DetectionAndImportRegressionTest(unittest.TestCase):
+    """路径前缀误判、导入覆盖、案例库脏数据回归。"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="mm_regress_"))
+        self.sys_path = str(ROOT / "shared" / "state-engine")
+        if self.sys_path not in os.sys.path:
+            os.sys.path.insert(0, self.sys_path)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _project(self, name: str) -> Path:
+        proj = self.tmp / name / "proj"
+        proj.mkdir(parents=True)
+        return proj
+
+    def test_detect_existing_materials_when_parent_dir_named_build(self):
+        """项目放在 .../build/... 或 .../state/... 下时仍有材料检测。
+
+        原实现检查绝对路径的每一段，撞上 IGNORED_PARTS 的 build/state 就整棵树跳过，
+        已有材料检测恒为 False，导致 sync_import 复用路径永远不触发。
+        """
+        import importlib
+        orr = importlib.import_module("orchestrator_runtime")
+        for parent in ("plain", "build", "state"):
+            with self.subTest(parent=parent):
+                proj = self.tmp / f"{parent}_case" / parent / "proj"
+                (proj / "Material").mkdir(parents=True)
+                (proj / "Material" / "old.md").write_text("# old", encoding="utf-8")
+                det = orr.detect_existing_materials(str(proj))
+                self.assertTrue(det["has_existing"], f"parent={parent!r} 时漏检已有材料")
+                self.assertIn("Material/old.md", det["found"]["paper"])
+
+    def test_sync_import_never_overwrites_previous_import(self):
+        """重复导入不得静默覆盖上一次的导入稿（声明了 overwrite: false）。"""
+        import importlib
+        si = importlib.import_module("sync_import")
+        src = self.tmp / "src"
+        src.mkdir()
+        proj = self.tmp / "proj"
+        (proj / "state").mkdir(parents=True)
+        (proj / "state" / "decision_log.json").write_text("{}", encoding="utf-8")
+        for body in ("# v1\n", "# v2\n", "# v3\n"):
+            (src / "paper.md").write_text(body, encoding="utf-8")
+            si.apply_plan(si.build_plan(src, proj), src, proj)
+        drafts = proj / "ReportPaper" / "LaTeX" / "drafts" / "import-paper"
+        kept = sorted(p.name for p in drafts.glob("source*.md"))
+        self.assertEqual(kept, ["source.md", "source_imported.md", "source_imported2.md"],
+                         f"重复导入覆盖了既有稿: {kept}")
+
+    def test_case_search_tolerates_missing_or_bad_year(self):
+        """案例库卡片缺 year / year 非数字时检索不能崩（外部数据）。"""
+        import importlib
+        csl = importlib.import_module("case_search_lib")
+        cases = [{"case_id": "a", "title": "优化", "problem_types": ["优化"], "models": []},
+                 {"case_id": "b", "title": "优化", "year": "2020年",
+                  "problem_types": ["优化"], "models": []},
+                 {"case_id": "c", "title": "优化", "year": 2021,
+                  "problem_types": ["优化"], "models": []}]
+        ranked = csl.score_cases("优化", cases)
+        self.assertEqual(len(ranked), 3, "缺 year 的卡片也应参与排序而不是抛异常")
+        self.assertEqual(ranked[0][1]["case_id"], "c", "合法年份应排在最前")
+        self.assertEqual(csl.filter_cases(cases, year=2021)[0]["case_id"], "c")
+        self.assertEqual(csl.filter_cases(cases, year=2020), [], "非数字年份不匹配该年过滤")
+
+    def test_case_search_save_rejects_traversal_case_id(self):
+        """案例库 index.json 是外部数据：恶意 case_id 不得把文件写出 state/cases/。"""
+        import importlib
+        ss = importlib.import_module("state_search")
+        skill_root = self.tmp / "skillroot"
+        lib = skill_root / "skills" / "mathematical-modeling" / "assets" / "case-library"
+        lib.mkdir(parents=True)
+        (lib / "index.json").write_text(json.dumps({
+            "cases": [{"case_id": "../../../../ESCAPED", "year": 2020, "title": "t",
+                       "core_problem": "多目标 调度", "problem_types": ["优化"],
+                       "models": ["整数规划"], "keywords": [], "validation_methods": [],
+                       "transferable_patterns": [], "card_path": "x"}]
+        }), encoding="utf-8")
+        proj = self.tmp / "caseproj"
+        (proj / "state" / "cases").mkdir(parents=True)
+        (proj / "state" / "cases" / "index.json").write_text(
+            json.dumps({"version": "1.0", "cases": []}), encoding="utf-8")
+
+        class Args:
+            dir = str(proj)
+            query = "多目标 调度"
+            top = 5
+            year = None
+            problem_type = None
+            model = None
+            save = True
+
+        Args.skill_root = str(skill_root)
+        Args.json = False
+        ss.cmd_case_search(Args())
+        escaped = [p for p in self.tmp.rglob("*ESCAPED*")]
+        self.assertEqual(escaped, [], f"路径穿越写到了项目外: {escaped}")
 
 
 if __name__ == "__main__":

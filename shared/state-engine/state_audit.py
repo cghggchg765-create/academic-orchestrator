@@ -289,15 +289,54 @@ def validate_result(root, result, expected_node=None, expected_run=None):
         else:
             raise ValueError(f"artifact 不存在: {rel}")
     result["validated_artifacts"] = checked_artifacts
+    # 审计 B-1：文档要求「回收时校验 read_skills 覆盖 must_load」，但此前没有任何机器校验。
+    # 这里补上：result 若声明了 read_skills，就必须覆盖 state/skill-routing/<node>.json 的 must_load；
+    # 未声明 read_skills 时按"未声明"记入 warnings（不静默视为通过，由 result-ingest 汇总暴露）。
+    result["skill_coverage"] = _check_read_skills(root, node, result.get("read_skills"))
     return result
+
+
+def _check_read_skills(root, node, read_skills):
+    """比对 result.read_skills 与派发清单 must_load（覆盖/缺失/未声明三种状态）。"""
+    manifest_path = os.path.join(root, STATE_DIR, "skill-routing", f"{node}.json")
+    must_load = []
+    if os.path.isfile(manifest_path):
+        try:
+            manifest = load_json(manifest_path, {}) or {}
+            must_load = [s for s in (manifest.get("must_load") or []) if str(s).strip()]
+        except (OSError, ValueError):
+            must_load = []
+    if not must_load:
+        return {"manifest": "empty", "must_load": [], "declared": [], "missing": [],
+                "ok": True, "warning": None}
+    if read_skills is None:
+        return {"manifest": "present", "must_load": must_load, "declared": [],
+                "missing": list(must_load), "ok": False,
+                "warning": "result 未声明 read_skills，无法证明必读 skill 已加载（派发清单要求："
+                           + ", ".join(must_load) + "）"}
+    if not isinstance(read_skills, list):
+        return {"manifest": "present", "must_load": must_load, "declared": [],
+                "missing": list(must_load), "ok": False,
+                "warning": "result.read_skills 必须是数组"}
+    declared = normalized_skill_set([str(s) for s in read_skills])
+    missing_keys = normalized_skill_set(must_load) - declared
+    missing = [s for s in must_load if skill_basename(s) in missing_keys]
+    return {"manifest": "present", "must_load": must_load,
+            "declared": sorted(declared), "missing": missing, "ok": not missing,
+            "warning": (f"result.read_skills 未覆盖派发清单 must_load：缺 {', '.join(missing)}"
+                        if missing else None)}
 
 
 def cmd_result_validate(args):
     root = os.path.abspath(args.dir)
     result = validate_result(root, _load_result(os.path.abspath(args.result)), args.node, args.run_id)
+    coverage = result.get("skill_coverage") or {}
     print(json.dumps({"valid": True, "node_id": result["node_id"], "run_id": result["run_id"],
-                      "status": result["status"], "artifacts": result["validated_artifacts"]},
+                      "status": result["status"], "artifacts": result["validated_artifacts"],
+                      "skill_coverage": coverage},
                      ensure_ascii=False, indent=2))
+    if coverage.get("warning"):
+        print(f"[state_utils] ⚠ {coverage['warning']}", file=sys.stderr)
 
 
 def cmd_result_ingest(args):
@@ -305,20 +344,78 @@ def cmd_result_ingest(args):
     state = load_state(root)
     result = validate_result(root, _load_result(os.path.abspath(args.result)), args.node, args.run_id)
     node = result["node_id"]
+    # 审计 B-2：回执挂在 result.json 的 corrections_ack 上，由本命令机器校验并落 correction-acks.jsonl。
+    # RespondToCoordinator 无法强制，而 result.json 是必须交付且已被机器校验的载体；
+    # 这样"纠正是否已被确认"不再依赖子 Agent 自觉。
+    from state_events import record_correction_acks_from_result
+    accepted_acks, ack_errors = record_correction_acks_from_result(root, result)
+    if ack_errors:
+        sys.exit("[state_utils] 拒绝 result-ingest：result.corrections_ack 校验未通过：\n  - "
+                 + "\n  - ".join(ack_errors))
+    # 协议 E.2：产物哈希必须与 dispatch.json 记录一致（空返回/伪完成检测）。
+    from state_events import check_dispatch_artifact_consistency
+    dispatch_errors = check_dispatch_artifact_consistency(root, result)
+    if dispatch_errors:
+        sys.exit("[state_utils] 拒绝 result-ingest：产物与派发句柄记录不一致（防伪完成）：\n  - "
+                 + "\n  - ".join(dispatch_errors))
     summary = {"agent_id": result["agent_id"], "run_id": result["run_id"], "status": result["status"],
                "review_verdict": result.get("review_verdict"), "decision_action": result.get("decision_action"),
-               "artifacts": result["validated_artifacts"], "ingested_at": now_iso()}
+               "artifacts": result["validated_artifacts"], "ingested_at": now_iso(),
+               "skill_coverage": result.get("skill_coverage") or {}}
+    if accepted_acks:
+        summary["corrections_acked"] = [a.get("correction_id") for a in accepted_acks]
+    coverage = summary["skill_coverage"]
+    if coverage.get("warning"):
+        # 不阻断（可能是历史项目/豁免场景），但必须显性告警——否则"回收校验 read_skills"仍是纸面要求。
+        print(f"[state_utils] ⚠ skill 覆盖未达派发清单要求：{coverage['warning']}", file=sys.stderr)
     round_no = result.get("payload", {}).get("round")
+    # P0-8：round_no 会拼进报告文件名，必须防路径穿越
+    if round_no is not None:
+        try:
+            round_no = int(round_no)
+            if round_no < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            sys.exit(f"[state_utils] 非法 round: {result.get('payload', {}).get('round')!r}（须为正整数）")
+    # P0-8：agent_id 会拼进路径，同样校验
+    from state_guard import safe_component, assert_within
+    safe_component(result["agent_id"], "agent_id")
     save_round_report(root, node, round_no, "result", result)
     state["nodes"][node].setdefault("results", []).append(summary)
     state["nodes"][node]["last_result"] = summary
     if result["status"] in {"blocked", "escalated", "repair_pending", "review_pending"}:
         state["nodes"][node]["status"] = result["status"]
     elif result["status"] == "completed":
+        # 2.0.0（P0-4）：result-ingest 曾是完整门禁旁路（无 checkpoint/产物/门禁/血缘校验）。
+        # 现在与 node-finish / round-decide 走同一套完成守卫。
+        if getattr(args, "skip_prereq", False):
+            state.setdefault("meta", {}).setdefault("prereq_skips", []).append(
+                {"at": now_iso(), "node": node, "reason": "result-ingest --skip-prereq（测试/迁移）"})
+        else:
+            from state_guard import require_completion_allowed
+            require_completion_allowed(
+                root, node,
+                allow_empty=getattr(args, "allow_empty_artifacts", False),
+                allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
+            )
+        # A3 判据的第二道执行点：N8 终审完成必须证明纠正留痕已闭环。
+        # 与"上游守卫"不同，这是**门禁判据本身**而不是前置条件，不随 --skip-prereq 放宽
+        # （否则交一份 completed result.json 就能绕过 node-review 的 CORRECTION_UNACKED）。
+        if node == "N8":
+            closure_errors = _n8_correction_closure_errors(root)
+            if closure_errors:
+                sys.exit("[state_utils] 拒绝 result-ingest N8 completed（纠正留痕闭环未通过）：\n  - "
+                         + "\n  - ".join(closure_errors))
         state["nodes"][node]["status"] = "completed"
         state["stages"][NODES[node]["stage"]]["status"] = "completed"
         state["stages"][NODES[node]["stage"]]["completed_at"] = now_iso()
     save_state(root, state)
+    # 协议 E.3：收到结果即回收派发句柄（幂等；无句柄/已收尾时不动）
+    try:
+        from state_events import close_dispatch_from_result
+        close_dispatch_from_result(root, result)
+    except Exception as exc:
+        print(f"[state_utils] ⚠ 派发句柄收尾失败（不影响本次结果入库）: {exc}", file=sys.stderr)
     refresh_dashboard(root)
     print(json.dumps({"ingested": True, "node_id": node, "run_id": result["run_id"], "status": result["status"]},
                      ensure_ascii=False, indent=2))
@@ -807,6 +904,156 @@ def _scan_orphans_for_audit(root):
         return []
 
 
+def _n8_correction_closure_errors(root):
+    """N8 终审的纠正留痕闭环校验（result-ingest 用；返回错误列表，空=通过）。
+
+    node-review 是 A3 的主判定点，但 result-ingest（status=completed）是另一条能写
+    "N8 完成"的路径。若不在这里补同一校验，子 Agent 交一份 completed result.json
+    就能绕过 A3 的 CORRECTION_UNACKED 判据。
+    """
+    try:
+        from state_events import summarize_corrections, unacked_corrections
+    except ImportError:
+        return []
+    summary = summarize_corrections(root)
+    errs = []
+    if not summary["chain"]["intact"]:
+        errs.append("纠正留痕账本哈希链断裂（CORRECTION_LEDGER_TAMPERED）——留痕被改写/删除，"
+                    "A3 不能建立在不可信账本上")
+    unacked = unacked_corrections(root)
+    if unacked:
+        listed = ", ".join(f"{c.get('correction_id')}(node={c.get('node')},agent={c.get('agent_id')})"
+                           for c in unacked[:5])
+        errs.append(f"CORRECTION_UNACKED：{len(unacked)} 条纠正未收到对应 Agent 回执（{listed}"
+                    f"{'…' if len(unacked) > 5 else ''}）——A3 不得 PASS；"
+                    f"由子 Agent 本人执行 correction-ack <correction_id> --agent <agent_id>")
+    return errs
+
+
+def check_correction_closure(root):
+    """project-audit 的纠正留痕汇总（结构稳定，供 N8 终检与人工核对消费）。"""
+    try:
+        from state_events import summarize_corrections
+    except ImportError:
+        return {"total": 0, "acked": 0, "unacked": 0,
+                "unacked_details": [], "by_node": {}, "by_type": {}, "by_delivery": {},
+                "ledger_exists": False, "acks_exists": False,
+                "chain": {"intact": True}, "corrupt_lines": 0,
+                "ack_rule": "state_events 不可用，跳过纠正留痕校验"}
+    return summarize_corrections(root)
+
+def check_dispatch_lifecycle(root):
+    """project-audit 的派发句柄汇总（含僵尸判定与并行写入冲突）。"""
+    try:
+        from state_events import dispatch_summary
+    except ImportError:
+        return {"total": 0, "by_status": {}, "running": [], "zombies": [],
+                "conflicts": [], "dispatches": []}
+    return dispatch_summary(root)
+
+
+# ---------------------------------------------------------------- 登记台账复核 / 孤儿报告缓存核验（P1-11 / P1-12）
+
+# 与 state_progress 的 ARTIFACT_REGISTRY / ORPHAN_REPORT 同路径；单独命名避免在 state_utils 的
+# 星号导入链上被 state_progress 的同名常量覆盖。
+ARTIFACT_REGISTRY_REPORT = os.path.join(REPORTS_DIR, "artifacts-registry.json")
+ORPHAN_SCAN_REPORT = os.path.join(REPORTS_DIR, "orphan-files.json")
+_REGISTRY_REL = ARTIFACT_REGISTRY_REPORT.replace(os.sep, "/")
+
+
+def check_artifact_registry_drift(root):
+    """复核产物登记台账：登记项是否仍与磁盘一致（弥补台账此前无消费者、sha256 从不复核的缺口）。
+
+    台账由 ``state_nodes._auto_register_outputs`` / ``register-artifact`` 写入。本检查按登记时的
+    sha256 复核每个 ``is_dir=False`` 条目：文件缺失 → ``missing``；文件存在但哈希不符 → ``drift``。
+    目录条目没有稳定单哈希，跳过比对。单文件读取/哈希失败按缺失处理并附原因，不中断整轮审计。
+    ``checked`` 统计实际完成哈希计算并比对的文件条目数（缺失/越界/台账损坏不计入）。
+    """
+    path = os.path.join(root, ARTIFACT_REGISTRY_REPORT)
+    result = {"registry_exists": os.path.isfile(path), "checked": 0, "drift": [], "missing": []}
+    if not result["registry_exists"]:
+        return result  # 新项目尚未产生登记台账，属正常状态，不报 issue
+    try:
+        registry = load_json(path, {}) or {}
+    except (OSError, ValueError) as exc:
+        result["missing"].append({"path": _REGISTRY_REL,
+                                  "reason": f"登记台账无法解析（{exc}），无法复核任何登记项"})
+        return result
+    entries = registry.get("artifacts") if isinstance(registry, dict) else None
+    if not isinstance(entries, list):
+        result["missing"].append({"path": _REGISTRY_REL,
+                                  "reason": "登记台账缺少 artifacts 数组（格式损坏），无法复核任何登记项"})
+        return result
+    for entry in entries:
+        if not isinstance(entry, dict):
+            result["missing"].append({"path": "-", "reason": "登记项不是对象（台账被改写）"})
+            continue
+        rel = str(entry.get("path") or "").strip()
+        node = entry.get("node")
+        if not rel:
+            result["missing"].append({"path": "-", "node": node, "reason": "登记项缺少 path（台账被改写）"})
+            continue
+        if entry.get("is_dir"):
+            continue  # 目录没有稳定单哈希，跳过哈希比对
+        full = os.path.abspath(os.path.join(root, rel))
+        if not (full == root or full.startswith(root + os.sep)):
+            result["missing"].append({"path": rel, "node": node, "reason": "登记路径越界（不在项目目录内）"})
+            continue
+        if not os.path.exists(full):
+            result["missing"].append({"path": rel, "node": node, "reason": "登记产物不存在（已删除）"})
+            continue
+        if not os.path.isfile(full):
+            result["missing"].append({"path": rel, "node": node, "reason": "登记为文件但当前不是普通文件（已被替换为目录或特殊文件）"})
+            continue
+        expected = entry.get("sha256")
+        if not expected:
+            result["missing"].append({"path": rel, "node": node,
+                                      "reason": "登记项缺少 sha256，无法校验完整性"})
+            continue
+        try:
+            actual = sha256_of(full)
+        except (OSError, ValueError) as exc:
+            result["missing"].append({"path": rel, "node": node,
+                                      "reason": f"读取/计算哈希失败: {exc}"})
+            continue
+        result["checked"] += 1
+        expected = str(expected)
+        if actual != expected:
+            result["drift"].append({"path": rel, "node": node,
+                                    "registered_sha256": expected[:12],
+                                    "actual_sha256": actual[:12],
+                                    "reason": "产物被改动或替换，登记已过期"})
+    return result
+
+
+def _check_orphan_report_cache(root, fresh_orphans):
+    """比对落盘的孤儿扫描报告（orphan-files.json）与本次重算结果（重算结果仍是权威来源）。
+
+    该文件此前只有写入方、没有读者。这里只做一致性核验，不回写缓存、不改重算逻辑。
+    """
+    path = os.path.join(root, ORPHAN_SCAN_REPORT)
+    if not os.path.isfile(path):
+        return {"cached": False}
+    try:
+        cached = load_json(path, {}) or {}
+        cached_orphans = cached.get("orphans") if isinstance(cached, dict) else None
+        if not isinstance(cached_orphans, list):
+            raise ValueError("缓存报告缺少 orphans 数组")
+    except (OSError, ValueError) as exc:
+        return {"cached": False, "error": f"缓存报告无法读取: {exc}"}
+    fresh = {str(p).replace("\\", "/") for p in fresh_orphans}
+    cached_set = {str(p).replace("\\", "/") for p in cached_orphans}
+    new_orphans = sorted(fresh - cached_set)      # 磁盘上新增、缓存未记录
+    resolved_orphans = sorted(cached_set - fresh)  # 缓存记录、磁盘现状已不再孤立
+    report = {"cached": True, "stale": bool(new_orphans or resolved_orphans),
+              "scanned_at": cached.get("scanned_at")}
+    if report["stale"]:
+        report["diff"] = {"new_orphans": new_orphans, "resolved_orphans": resolved_orphans,
+                          "new_orphans_count": len(new_orphans),
+                          "resolved_orphans_count": len(resolved_orphans)}
+    return report
+
+
 def cmd_project_audit(args):
     root = os.path.abspath(args.dir)
     report = {"project": root, "audited_at": now_iso()}
@@ -844,9 +1091,17 @@ def cmd_project_audit(args):
     # 2.0.0：孤儿文件扫描入审计（此前 orphan-scan 是独立命令、无人调用）。
     # 找出既不在任何节点产物目录、也未登记入库的散落文件。
     report["orphan_files"] = _scan_orphans_for_audit(root)
+    # P1-12：orphan-files.json 此前只写不读。重算结果仍是权威来源，缓存只做一致性核验。
+    report["orphan_report"] = _check_orphan_report_cache(root, report["orphan_files"])
+    # P1-11：artifacts-registry 此前无消费者、sha256 从不复核。按登记哈希复核磁盘现状。
+    report["artifact_registry"] = check_artifact_registry_drift(root)
     # 2.0.0：门禁事件流完整性 + 豁免统计（门禁是否被静默绕过/篡改）
     report["gate_events"] = _gate_events_for_audit(root)
     report["exemptions"] = _exemptions_for_audit(root)
+    # 2.0.0 纠正留痕闭环 + 派发句柄生命周期（对应「后台并行派发与运行中纠正协议」）：
+    # 此前 corrections.jsonl / dispatch.json 只有文档承诺、无写入方也无消费者（纸面协议）。
+    report["corrections"] = check_correction_closure(root)
+    report["dispatch"] = check_dispatch_lifecycle(root)
     issues = []
     if report["state_authenticity"]:
         issues.append("状态文件非标准（疑似绕过 CLI 手工创建）")
@@ -886,6 +1141,34 @@ def cmd_project_audit(args):
                       + ", ".join(report["orphan_files"][:5])
                       + ("…" if len(report["orphan_files"]) > 5 else "")
                       + "（移入对应节点产物目录并登记，或确认属源码/配置后豁免）")
+    artifact_registry = report["artifact_registry"]
+    if artifact_registry["drift"] or artifact_registry["missing"]:
+        findings = artifact_registry["drift"] + artifact_registry["missing"]
+        detail = []
+        for d in artifact_registry["drift"][:5]:
+            detail.append(f"{d.get('path')}（登记 {d['registered_sha256']}… / 实际 {d['actual_sha256']}…）")
+        for m in artifact_registry["missing"][:5]:
+            detail.append(f"{m.get('path')}（{m.get('reason', '未知原因')}）")
+        issues.append(f"产物被改动或替换，登记已过期（artifacts-registry 复核：哈希漂移 "
+                      f"{len(artifact_registry['drift'])} 项、缺失 {len(artifact_registry['missing'])} 项）："
+                      + "、".join(detail) + ("…" if len(findings) > 5 else "")
+                      + "；请恢复产物或重新登记（register-artifact）后重跑 project-audit")
+    orphan_report = report["orphan_report"]
+    if orphan_report.get("error"):
+        issues.append(f"缓存的孤儿扫描报告无法读取（{orphan_report['error']}），请重跑 orphan-scan --apply 重建")
+    if orphan_report.get("stale"):
+        diff = orphan_report.get("diff") or {}
+        new_orphans = diff.get("new_orphans") or []
+        resolved = diff.get("resolved_orphans") or []
+        detail = []
+        if new_orphans:
+            detail.append("磁盘已新增孤儿 " + ", ".join(new_orphans[:3])
+                          + ("…" if len(new_orphans) > 3 else ""))
+        if resolved:
+            detail.append("缓存记录的孤儿已消失 " + ", ".join(resolved[:3])
+                          + ("…" if len(resolved) > 3 else ""))
+        issues.append("缓存的孤儿扫描报告已过期（磁盘现状与缓存不一致），请重跑 orphan-scan --apply"
+                      f"（缓存 scanned_at={orphan_report.get('scanned_at')}）：" + "；".join(detail))
     if not report["gate_events"].get("intact", True):
         issues.append(f"门禁事件流哈希链断裂（{report['gate_events'].get('broken_at')}）"
                       f"——门禁历史被改动，评审结论不可信")
@@ -893,6 +1176,32 @@ def cmd_project_audit(args):
         issues.append(f"存在 {report['exemptions']['total']} 次门禁豁免"
                       f"（{report['exemptions'].get('by_kind', {})}）——"
                       f"豁免的 PASS 不等同于真通过，需人工复核")
+    corrections = report["corrections"]
+    if not corrections.get("chain", {}).get("intact", True):
+        issues.append("纠正留痕账本哈希链断裂（CORRECTION_LEDGER_TAMPERED）——"
+                      "corrections.jsonl / correction-acks.jsonl 被事后改写或删除，"
+                      "A3 的纠正闭环判据不可信")
+    elif corrections.get("unacked", 0) > 0:
+        detail = "、".join(
+            f"{c.get('correction_id')}(node={c.get('node')},agent={c.get('agent_id')})"
+            for c in (corrections.get("unacked_details") or [])[:5])
+        issues.append(f"CORRECTION_UNACKED：{corrections['unacked']} 条纠正未收到对应 Agent 回执"
+                      f"（{detail}{'…' if corrections['unacked'] > 5 else ''}）——A3 不得 PASS，"
+                      f"由子 Agent 本人 correction-ack 收口")
+    dispatch = report["dispatch"]
+    if dispatch.get("zombies"):
+        names = "、".join(
+            f"{d.get('agentId')}(node={d.get('node')},idle={d.get('age_s')}s>{d.get('ttl_s')}s)"
+            for d in dispatch["zombies"][:5])
+        issues.append(f"派发句柄僵尸：{len(dispatch['zombies'])} 个 running 记录超过 ttl 无任何活动"
+                      f"（{names}{'…' if len(dispatch['zombies']) > 5 else ''}）——"
+                      f"确认 Agent 是否卡死；已失联的用 dispatch-close --status timeout 收尾")
+    if dispatch.get("conflicts"):
+        detail = "；".join(
+            f"{'↔'.join(map(str, c.get('agents') or []))}（{c.get('overlaps')[0].get('first')}）"
+            for c in dispatch["conflicts"][:3])
+        issues.append(f"并行写入冲突：{len(dispatch['conflicts'])} 组 running Agent 声明了同一写入目标"
+                      f"（{detail}）——违反「同一业务文件只允许一个写入者」，须串行化或划清写入边界")
     report["summary"] = {"healthy": not issues, "issues": issues}
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

@@ -6,6 +6,10 @@
 *.rar
 docs/smoke_iteration/
 
+# ===== 历史归档与评测产物（不进公开仓库：单一版本纪律）=====
+docs/archive/
+evals/heldout/*/runs/
+
 # ===== 参考项目（不随 GitHub 同步）=====
 ref/
 

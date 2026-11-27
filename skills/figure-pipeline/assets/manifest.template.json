@@ -1,0 +1,30 @@
+{
+  "request": "用户原话摘要",
+  "slug": "fig1",
+  "context": {
+    "journal": "",
+    "format": "",
+    "language": "",
+    "figure_system": "",
+    "confidential": false
+  },
+  "assignments": [
+    {
+      "figure": "fig1",
+      "skill": "",
+      "role": "producer",
+      "status": "planned",
+      "inputs": [],
+      "outputs": [],
+      "qa": {
+        "owner": "",
+        "status": "pending",
+        "notes": ""
+      },
+      "next": ""
+    }
+  ],
+  "handoffs": [],
+  "open_questions": [],
+  "next": ""
+}

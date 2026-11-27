@@ -1,0 +1,229 @@
+{
+  "schema_version": "upstream-sources/1.0",
+  "_comment": "本插件依赖的全部外部技能/插件来源清单（可分发）。所有 repo 地址均从本机 git remote 实测读取，不是凭记忆填写。任何人拿到本仓库后，按 install_checklist 逐项安装并跑 scripts/preflight.py 自检即可。",
+  "generated_at": "2026-11-26",
+  "verified_by": "git remote get-url origin（本机 skill-sources 与 skills 目录实测）",
+
+  "install_order": [
+    "1. 装 ZCode 本体（宿主）",
+    "2. 装必需插件：academic-research-skills",
+    "3. 装技能库：ARIS、nature 家族、figure-pipeline、voice-pipeline",
+    "4. 装可选能力：drawio / figures4papers / visio / nsfc / ppt-master 等",
+    "5. 配 MCP（paper-mcp 等，见 mcp/ 目录）",
+    "6. 跑 python scripts/preflight.py 自检"
+  ],
+
+  "sources": [
+    {
+      "id": "academic-research-skills",
+      "tier": "required",
+      "kind": "plugin",
+      "role": "学术界主体能力：论文写作（academic-paper）、深度研究（deep-research）、同行评审（academic-paper-reviewer）、全链路编排（academic-pipeline）、系统综述（sr-screener）",
+      "repo": "https://github.com/Imbad0202/academic-research-skills.git",
+      "install": "ZCode 插件市场安装，或 git clone 后按 README 注册为本地插件",
+      "local_path": "C:\\Users\\11352\\.zcode\\cli\\plugins\\cache\\academic-research-skills",
+      "provides": ["academic-paper", "academic-paper-reviewer", "academic-pipeline", "deep-research", "sr-screener"],
+      "verify": "会话内能加载 academic-research-skills:academic-paper；或 ls <插件缓存>/academic-research-skills/*/academic-paper/SKILL.md"
+    },
+    {
+      "id": "aris",
+      "tier": "required",
+      "kind": "skill_bundle",
+      "role": "科研全流程套件（87 子技能：文献检索/选题/实验与算力/公式与证明/论文写作/配图/专利/基金）",
+      "repo": "https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep.git",
+      "install": "git clone → 链接或复制到 ~/.zcode/skills/aris（按需加载子技能，不整体载入）",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\aris",
+      "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\Auto-claude-code-research-in-sleep",
+      "provides": ["research-pipeline", "idea-discovery", "experiment-bridge", "auto-review-loop", "paper-writing", "patent-pipeline", "grant-proposal"],
+      "verify": "ls ~/.zcode/skills/aris/skills/ | wc -l  # 应为 87 左右；阅读 aris/skills/INDEX.md"
+    },
+    {
+      "id": "nature-skills",
+      "tier": "required",
+      "kind": "skill_bundle",
+      "role": "科研写作/检索/精读/交付矩阵（23 个 nature-* + nature-shared 共享层）",
+      "repo": "https://github.com/Yuan1z0825/nature-skills.git",
+      "install": "git clone → 将 skills/nature-* 复制或链接到 ~/.zcode/skills/",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\nature-writing",
+      "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\nature-skills",
+      "provides": ["nature-writing", "nature-polishing", "nature-reviewer", "nature-response", "nature-reader", "nature-paper-card", "nature-paper-xray", "nature-data", "nature-statistics", "nature-figure", "nature-paper2word", "nature-paper2ppt", "nature-academic-search", "nature-ref-verifier"],
+      "verify": "ls ~/.zcode/skills/ | grep -c '^nature-'  # 应为 23；且 nature-shared 存在"
+    },
+    {
+      "id": "figure-pipeline",
+      "tier": "required",
+      "kind": "skill",
+      "role": "科研绘图协同总控（能力地图 + 角色分配 + 交接协议 + 失败重路由）。它自己不画图，调度下列 figure 子技能",
+      "repo": "LOCAL_ONLY",
+      "repo_note": "本机为本地构建（含 registry.json/scripts/doctor.py/update.py），无公开仓库；随本插件或单独打包分发",
+      "install": "复制 ~/.zcode/skills/figure-pipeline 整个目录；再按下方 figure_subskills 逐个安装子技能",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\figure-pipeline",
+      "provides": ["figure-pipeline"],
+      "verify": "python ~/.zcode/skills/figure-pipeline/scripts/doctor.py"
+    },
+    {
+      "id": "voice-pipeline",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "学术文风治理总控（防御性写作拦截 + 去AI味），调度下列 voice 子技能",
+      "repo": "LOCAL_ONLY",
+      "repo_note": "本机为本地构建，无公开仓库；随包分发",
+      "install": "复制 ~/.zcode/skills/voice-pipeline 整个目录",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\voice-pipeline",
+      "provides": ["voice-pipeline"],
+      "verify": "python ~/.zcode/skills/voice-pipeline/scripts/doctor.py"
+    },
+
+    {
+      "id": "scipilot-figure-skill",
+      "tier": "recommended",
+      "kind": "skill",
+      "role": "figure-pipeline 的 S0：数据画像、图型选择、误导性画法拦截",
+      "repo": "https://github.com/Haojae/scipilot-figure-skill.git",
+      "install": "git clone → 复制到 ~/.zcode/skills/scipilot-figure-skill",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\scipilot-figure-skill",
+      "used_by": "figure-pipeline S0"
+    },
+    {
+      "id": "figures4papers",
+      "tier": "recommended",
+      "kind": "skill",
+      "role": "figure-pipeline 的 S1：可复现 matplotlib 投稿图、house style、多面板拼版",
+      "repo": "https://github.com/ChenLiu-1996/figures4papers.git",
+      "install": "git clone → 复制为 ~/.zcode/skills/scientific-figure-making",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\scientific-figure-making",
+      "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\figures4papers",
+      "used_by": "figure-pipeline S1"
+    },
+    {
+      "id": "drawio-skill",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "figure-pipeline 的 S3：draw.io 架构图/流程图（可编辑 .drawio）",
+      "repo": "https://github.com/Agents365-ai/drawio-skill.git",
+      "install": "git clone → 复制到 ~/.zcode/skills/drawio-skill",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\drawio-skill",
+      "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\drawio-skill",
+      "used_by": "figure-pipeline S3",
+      "note": "本插件 1.x 曾打包旧版 1.14.0 副本，2.0.0 已删除，改为运行时路由到本机已装版本"
+    },
+    {
+      "id": "codex-visio-paper-figure-skill",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "figure-pipeline 的 S4：原生 .vsdx 重建与多格式导出",
+      "repo": "https://github.com/pengjunchi0/codex-visio-paper-figure-skill.git",
+      "install": "git clone → 复制为 ~/.zcode/skills/visio-image-rebuilder",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\visio-image-rebuilder",
+      "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\codex-visio-paper-figure-skill",
+      "used_by": "figure-pipeline S4",
+      "note": "需 Windows + 本机安装 Visio（COM）；无 Visio 时 S4 不可用"
+    },
+    {
+      "id": "paper-framework-figure-studio-pro",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "论文框架图/概念图工作台",
+      "repo": "https://github.com/c-narcissus/paper-framework-figure-studio-pro.git",
+      "local_path": "C:\\Users\\11352\\.zcode\\skill-sources\\paper-framework-figure-studio-pro"
+    },
+    {
+      "id": "nsfc-agent-skills",
+      "tier": "optional",
+      "kind": "skill_bundle",
+      "role": "国家自然科学基金申请书专线（nsfc-policy / nsfc-literature / nsfc-write / nsfc-figure）",
+      "repo": "https://github.com/njzjz/nsfc-agent-skills.git",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\nsfc-policy",
+      "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\nsfc-agent-skills",
+      "provides": ["nsfc-policy", "nsfc-literature", "nsfc-write", "nsfc-figure"]
+    },
+    {
+      "id": "AI-Research-SKILLs",
+      "tier": "optional",
+      "kind": "skill_bundle",
+      "role": "AI 研究向技能集",
+      "repo": "https://github.com/Orchestra-Research/AI-Research-SKILLs.git",
+      "local_path": "C:\\Users\\11352\\.zcode\\skill-sources\\AI-Research-SKILLs"
+    },
+    {
+      "id": "scientific-agent-skills",
+      "tier": "optional",
+      "kind": "skill_bundle",
+      "role": "科学计算向技能集（K-Dense AI）",
+      "repo": "https://github.com/K-Dense-AI/scientific-agent-skills.git",
+      "local_path": "C:\\Users\\11352\\.zcode\\skill-sources\\scientific-agent-skills"
+    },
+    {
+      "id": "Research-Paper-Writing-Skills",
+      "tier": "optional",
+      "kind": "skill_bundle",
+      "role": "论文写作向技能集",
+      "repo": "https://github.com/Master-cai/Research-Paper-Writing-Skills.git",
+      "local_path": "C:\\Users\\11352\\.zcode\\skill-sources\\Research-Paper-Writing-Skills"
+    },
+    {
+      "id": "ppt-master",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "PPT 生成",
+      "repo": "https://github.com/hugohe3/ppt-master.git",
+      "local_path": "C:\\Users\\11352\\.zcode\\skill-sources\\ppt-master"
+    },
+
+    {
+      "id": "Humanizer-zh",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "中文去 AI 味（与插件内 humanizer/academic-humanize 互补）",
+      "repo": "LOCAL_ONLY",
+      "repo_note": "本机无 git 记录；若上游有公开发布需人工补登",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\humanizer-zh"
+    },
+    {
+      "id": "anti-defensive-writing",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "防御性写作拦截（中英两版）",
+      "repo": "LOCAL_ONLY",
+      "repo_note": "本机无 git 记录；若上游有公开发布需人工补登",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\anti-defensive-writing"
+    },
+    {
+      "id": "agent-reach",
+      "tier": "optional",
+      "kind": "skill",
+      "role": "13 平台互联网调研（小红书/Twitter/B站/Reddit 等）",
+      "repo": "LOCAL_ONLY",
+      "repo_note": "本机无 git 记录；依赖各平台 CLI/API",
+      "local_path": "C:\\Users\\11352\\.zcode\\skills\\agent-reach"
+    }
+  ],
+
+  "figure_subskills": {
+    "_comment": "figure-pipeline/registry.json 的实测内容，供逐个安装时对照",
+    "S0": {"name": "scipilot-figure-skill", "repo": "https://github.com/Haojae/scipilot-figure-skill.git"},
+    "S1": {"name": "scientific-figure-making", "repo": "https://github.com/ChenLiu-1996/figures4papers.git"},
+    "S2": {"name": "nature-figure", "repo": "https://github.com/Yuan1z0825/nature-skills.git"},
+    "S2b": {"name": "nature-image2ppt", "repo": "https://github.com/Yuan1z0825/nature-skills.git"},
+    "S3": {"name": "drawio-skill", "repo": "https://github.com/Agents365-ai/drawio-skill.git"},
+    "S4": {"name": "visio-image-rebuilder", "repo": "https://github.com/pengjunchi0/codex-visio-paper-figure-skill.git"}
+  },
+
+  "voice_subskills": {
+    "_comment": "voice-pipeline/registry.json 的实测内容；这些都是本地件，无公开仓库",
+    "anti-defensive-writing": "LOCAL_ONLY",
+    "anti-defensive-writing-en": "LOCAL_ONLY",
+    "humanizer-zh": "LOCAL_ONLY",
+    "doubao-human-signal": "doubao builtin"
+  },
+
+  "mcp_requirements": [
+    {"id": "paper-mcp", "role": "文献检索与归档（N1/N3/N7 必调）", "required": true,
+     "install": "本机 PaperMCP 构建产物；或替换为等价学术检索 MCP"},
+    {"id": "tavily-mcp", "role": "全网搜索（N1/N5 必调，未装回退 tokenhub-tools）", "required": true,
+     "note": "需 API key，放环境变量，不入库"},
+    {"id": "context7", "role": "算法/库文档（N3/N4）", "required": false},
+    {"id": "github", "role": "开源工程检索（N4/N5）", "required": false},
+    {"id": "zotero", "role": "文献库与 PDF 精读", "required": false, "note": "需在 MCP 设置里授权"}
+  ]
+}

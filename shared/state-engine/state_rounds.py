@@ -46,6 +46,53 @@ def _scope_round_phase(root, node, round_no, scope_id, phase, status="completed"
         sys.exit(f"[state_utils] 作用域 {scope_id} 阶段更新失败: {exc}")
 
 
+def _deadline_passed(deadline):
+    """判断 budget.deadline 是否已过。返回 (passed, note)。
+
+    此前直接 `now_iso() > deadline` 做字符串比较，只有当 deadline 恰好写成
+    同格式 ISO 串时才对：
+      deadline="2026-11-26"          → "2026-11-26T15:04Z" > "2026-11-26" 为 True，
+                                       即当天一开始就被当成"已截止"（差一天）
+      deadline="2026-11-26T23:59:00Z" → 正常
+      deadline="2026-11-26 23:59"     → 空格 < "T"，同一天内恒为 True
+    配置是人手写的，格式无法假定。这里统一解析成 UTC datetime 再比；
+    解析失败则返回 (False, 提示)，不静默当作"没有截止"。
+    """
+    text = str(deadline or "").strip()
+    if not text:
+        return False, ""
+    now = datetime.now(timezone.utc)
+    # 只给日期 → 视为当天 23:59:59 UTC 截止（给用户留满当天）
+    try:
+        if len(text) == 10 and text[4] == "-" and text[7] == "-":
+            due = datetime.strptime(text, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        else:
+            normalized = text.replace(" ", "T").replace("Z", "+00:00")
+            due = datetime.fromisoformat(normalized)
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+            else:
+                due = due.astimezone(timezone.utc)
+    except ValueError:
+        return False, (f"budget.deadline={text!r} 不是可解析的时间"
+                       f"（支持 YYYY-MM-DD 或 ISO-8601），本次按未设截止处理")
+    return now > due, ""
+
+
+def missing_dimensions(node, dims):
+    """返回该环尚未给分的维度名集合。
+
+    历史契约允许只给部分维度（既有测试以单维度调用 round-score 验证门禁接线），
+    因此这里不拒绝落盘，而是把缺失维度暴露出来：写入 score.dimensions_partial
+    并在 stderr 告警，避免"少交维度 = 逃避该维扣分与硬上限"完全无声。
+    """
+    code_dims = {"correctness", "efficiency", "readability", "robustness", "innovation"}
+    paper_dims = {"假设合理性", "建模创造性", "结果正确性", "表述清晰性", "格式规范性"}
+    allowed_dims = code_dims if PROFILE_OF[node] == "code" else paper_dims
+    return allowed_dims - set(dims)
+
+
 def cmd_round_start(args):
     root = os.path.abspath(args.dir)
     require_node(args.node, allowed=set(PROFILE_OF))
@@ -58,6 +105,22 @@ def cmd_round_start(args):
         except (ScopeError, ValueError) as exc:
             sys.exit(f"[state_utils] 非法 scope-id: {exc}")
     verify_problem_lock(root)
+    # 2.0.0（P0-2）：开轮前必须满足与 node-start 相同的前置——
+    # 上游 completed + 上游全部门禁 PASS + 上游产物未漂移。否则可零工作量开轮并完成。
+    # 注意：这里不要求本节点已 node-start（开轮可以先于/后于节点开工），
+    # "必须 start 过"由 round-decide 的完成守卫检查。
+    # --skip-prereq 仅供单测构造场景使用（生产禁用，会在 rounds 留痕）。
+    from state_guard import check_upstream
+    if getattr(args, "skip_prereq", False):
+        state.setdefault("meta", {}).setdefault("prereq_skips", []).append(
+            {"at": now_iso(), "node": node, "reason": "round-start --skip-prereq（测试/迁移）"})
+    else:
+        up_errs = check_upstream(root, node, state)
+        if up_errs:
+            sys.exit(
+                f"[state_utils] 拒绝 round-start {node}（{len(up_errs)} 项前置不满足）：\n  - "
+                + "\n  - ".join(up_errs[:8])
+            )
     if any(r.get("node") == node and r.get("status") == "in_progress"
            and (r.get("scope_id") == scope_id if scope_id else not r.get("scope_id")) for r in state["rounds"]):
         suffix = f" scope={scope_id}" if scope_id else ""
@@ -139,11 +202,22 @@ def cmd_round_score(args):
     target_round = _find_round(state, node, args.round, scope_id)
     if target_round is None:
         suffix = f" scope={scope_id}" if scope_id else ""
-        sys.exit(f"[state_utils] 未找到 node={node} round={args.round}{suffix}，请先 round-start")
+        sys.exit(f"[state_utils] 未找到 node={node} round={args.round}{suffix}。\n"
+                 f"  请先开轮: python state/state_utils.py round-start {node}"
+                 f"{' --scope-id ' + scope_id if scope_id else ''} --dir .\n"
+                 f"  已开轮次可查: python state/state_utils.py dump --dir .")
     if target_round.get("status") != "in_progress":
-        sys.exit(f"[state_utils] 轮次 {node}/round{args.round} 不可评分，当前状态: {target_round.get('status')}")
+        sys.exit(
+            f"[state_utils] 轮次 {node}/round{args.round} 不可评分，当前状态: "
+            f"{target_round.get('status')}\n"
+            f"  评分只对 in_progress 轮次有效。继续本轮请先开新轮：\n"
+            f"    python state/state_utils.py round-start {node} --dir .\n"
+            f"  查看已有轮次：python state/state_utils.py dump --dir ."
+        )
     if target_round.get("score") is not None:
-        sys.exit(f"[state_utils] 轮次 {node}/round{args.round} 已评分，拒绝重复写入")
+        sys.exit(f"[state_utils] 轮次 {node}/round{args.round} 已评分，拒绝重复写入。\n"
+                 f"  评分是 append-only 审计留痕；若确需重评，请开新轮：\n"
+                 f"    python state/state_utils.py round-start {node} --dir .")
     # 核心节点 MCP 必调：迭代每轮必须重新检索（禁止纯内生输出）——本轮无检索留痕则拒绝评分
     require_mcp_search_evidence(root, node, round_no=args.round,
                                 allow_flag=getattr(args, "allow_missing_mcp", False))
@@ -162,10 +236,17 @@ def cmd_round_score(args):
     unknown_dims = set(dims) - allowed_dims
     if unknown_dims:
         sys.exit(f"[state_utils] 评分维度键名非法: {sorted(unknown_dims)}（{PROFILE_OF[node]} 环允许: {sorted(allowed_dims)}）")
+    # 缺维度不拦（历史契约允许部分评分），但必须留痕，避免静默逃避硬上限
+    absent_dims = sorted(missing_dimensions(node, dims))
+    if absent_dims:
+        print(f"[state_utils] ⚠ 评分缺维度 {absent_dims}（{PROFILE_OF[node]} 环）——"
+              f"缺的维度不参与硬上限判定，建议补齐五维", file=sys.stderr)
     target_round["score"] = {"total": total, "dimensions": dims, "judge": args.judge,
                              "skills_read": [s.strip() for s in args.skills_read.split(",") if s.strip()],
                              "evidence": [s.strip() for s in args.evidence.split(",") if s.strip()],
                              "timestamp": now_iso(), "notes_sha": None}
+    if absent_dims:
+        target_round["score"]["dimensions_partial"] = absent_dims
     if scope_id:
         target_round["score"].update({"scope_id": scope_id, "scope_key": target_round.get("scope_key")})
     # 本轮知识卡片引用（命名约定 {node}_r{round}_{slug}.md）：使"每轮检索→卡片沉淀"可追踪，N8 终检核对"迭代有新检索"
@@ -248,7 +329,10 @@ def cmd_round_decide(args):
         if max(r["score"]["total"] for r in recent) - min(r["score"]["total"] for r in recent) < profile["plateau"]["epsilon"]:
             plateau = True
     deadline = (profile.get("budget") or {}).get("deadline")
-    deadline_passed = bool(deadline) and now_iso() > deadline
+    deadline_passed, deadline_note = _deadline_passed(deadline)
+    if deadline_note:
+        # deadline 写了但解析不了：不能静默当作"没设截止"，否则用户以为有截止却从未生效
+        print(f"[state_utils] ⚠ {deadline_note}", file=sys.stderr)
 
     if total >= profile["target"]:
         action = "early_stop"
@@ -309,17 +393,25 @@ def cmd_round_decide(args):
             state["nodes"][node]["status"] = "in_progress"
             state["nodes"][node]["optimization_available"] = True
         if action in merge_actions and action != "pass_continue":
-            # 2.0.0（P1-8）：迭代节点的 completed 由本命令写入，不走 node-finish，
-            # 因此必须在此执行同一套交付物校验（checkpoint + 真实产物）。
-            try:
-                from state_nodes import require_node_deliverables
-                require_node_deliverables(
+            # 2.0.0（P0-2）：迭代节点的 completed 由本命令写入，必须走统一完成守卫。
+            #
+            # 🔴 但**不能查本节点门禁**——这里有真实的顺序依赖，查了就是死锁：
+            #   P2/T1 由 node-review 落盘，而标准顺序是
+            #   round-start → round-score → round-decide → node-review
+            #   若 round-decide 要求 P2/T1 已 PASS，这两个门禁永远等不到，N4/N5 无法完成。
+            # 本命令的职责是"迭代收敛判定 + 产物/上游校验"；节点级门禁验收交给随后的 node-review。
+            if getattr(args, "skip_prereq", False):
+                state.setdefault("meta", {}).setdefault("prereq_skips", []).append(
+                    {"at": now_iso(), "node": node, "reason": "round-decide --skip-prereq（测试/迁移）"})
+            else:
+                from state_guard import require_completion_allowed
+                require_completion_allowed(
                     root, node,
+                    skills=getattr(args, "skills_read", None),
                     allow_empty=getattr(args, "allow_empty_artifacts", False),
                     allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
+                    check_own_gates=False,
                 )
-            except ImportError:
-                pass
             state["nodes"][node]["status"] = "completed"
             state["stages"][NODES[node]["stage"]]["status"] = "completed"
             state["stages"][NODES[node]["stage"]]["completed_at"] = now_iso()

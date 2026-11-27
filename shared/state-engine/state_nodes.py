@@ -40,37 +40,19 @@ def cmd_node_start(args):
     # ---- 上游前置校验（N0 例外） ----
     if node != "N0":
         verify_problem_lock(root)
-        missing = []
-        for up_node, up_name in UPSTREAM.get(node, []):
-            up_status = state["nodes"].get(up_node, {}).get("status", "pending")
-            if up_status != "completed":
-                missing.append(f"上游节点 {up_node}({up_name}) 状态为 {up_status}，需要 completed")
-            # 上游审阅门禁校验（防"阶段不完全/修改不完善就进下一步"）：上游必须已通过独立审阅循环。
-            # P1-1：原先只查 REVIEW_GATE，B1 这类同节点附加门禁不参与推进判定 → 形同摆设。
-            # 现在遍历上游节点声明的全部门禁，任一未过都阻塞。
-            up_gates = list(NODES.get(up_node, {}).get("gates") or [])
-            if REVIEW_GATE.get(up_node) and REVIEW_GATE[up_node] not in up_gates:
-                up_gates.append(REVIEW_GATE[up_node])
-            for up_gate in up_gates:
-                # H 门禁为人工在环（advisory），不作为自动推进的硬阻塞
-                if up_gate.startswith("H"):
-                    continue
-                up_gate_status = (state["gates"].get(up_gate) or {}).get("status", "pending")
-                if up_gate_status not in {"PASS", "auto_passed", "confirmed"}:
-                    missing.append(f"上游节点 {up_node} 门禁 {up_gate}={up_gate_status}"
-                                   f"（未通过/未审阅）——必须先完成'审阅→修改→再审阅'循环（PASS）再开工 {node}")
-            # 检查静态 artifact 是否存在
-            up_artifact = NODES.get(up_node, {}).get("artifact", "")
-            for art_path in up_artifact.split(","):
-                art_path = art_path.strip()
-                if not art_path:
-                    continue
-                full = os.path.join(root, art_path)
-                if not os.path.exists(full):
-                    missing.append(f"上游节点 {up_node} 的产物 {art_path} 不存在")
+        # 单一实现：上游 completed + 全部门禁 PASS + 产物哈希未漂移 + 产物存在
+        # 由 state_guard.check_upstream 统一判定（此前本函数另写一套，漏了漂移检查，
+        # 导致"审阅后偷改上游产物"在 node-start 路径上完全不被拦截）。
+        from state_guard import check_upstream
+        missing = check_upstream(root, node, state, require_artifact_present=True)
         if missing:
-            info = "; ".join(missing)
-            sys.exit(f"[state_utils] 前置条件未满足: {info}")
+            sys.exit(
+                f"[state_utils] 拒绝 node-start {node}：前置条件未满足（上游 {len(missing)} 项）：\n  - "
+                + "\n  - ".join(missing)
+                + f"\n  修法：先补齐上游产物/门禁，或重跑上游审阅 "
+                  f"（python state/state_utils.py node-review <up_node> --agent <审阅Agent> "
+                  f"--result PASS --skills \"<必读skill>\" --evidence <证据路径>）。"
+            )
 
     state["nodes"][node]["status"] = "in_progress"
     # P1-10：记录开工时的产物快照，作为"是否真的产出"的基准。
@@ -180,14 +162,30 @@ def cmd_node_finish(args):
         r.get("node") == node and r.get("status") == "in_progress" for r in state["rounds"])
     if in_iter:
         print(f"[state_utils] 节点 {node} 处于迭代轮次中：仅登记产物并刷新首页，completed 状态由 round-decide（early_stop/达标终止）决定")
-    else:
-        state["nodes"][node]["status"] = "completed"
-        state["stages"][stage]["status"] = "completed"
-        state["stages"][stage]["completed_at"] = now_iso()
     state["nodes"][node]["goal"] = ""
     state["nodes"][node]["executed_by"] = executor
     if node != "N0":
         state["nodes"][node]["skills_used"] = [s.strip() for s in (args.skills or "").split(",") if s.strip()]
+    # 2.0.0（P0-3）：非 N0 必须曾经 node-start。否则 start_artifact_hash 缺失、
+    # skill 派发清单未生成，后续技能校验与上游校验都会被静默跳过。
+    # --skip-prereq 与 round-start/round-decide/result-ingest 同一开关语义：
+    # 跳过"未开工 + 上游"两段前置守卫，仅供单测/历史项目迁移，写入 meta.prereq_skips 留痕。
+    # 注意：这里**不查本节点门禁**——node-finish 是"登记产物、交件待审"，
+    # 门禁由随后的 node-review 落盘（执行顺序：node-finish → node-review → 门禁 PASS）。
+    # 若在此要求门禁已过，正常流程永远无法推进。
+    from state_guard import check_not_started, check_upstream
+    if getattr(args, "skip_prereq", False):
+        state.setdefault("meta", {}).setdefault("prereq_skips", []).append(
+            {"at": now_iso(), "node": node, "reason": "node-finish --skip-prereq（测试/迁移）"})
+    else:
+        msg = check_not_started(root, node, state)
+        if msg:
+            sys.exit(msg)
+        # 上游 completed + 门禁 PASS + 产物未漂移（防"审阅后改上游"）
+        up_errs = check_upstream(root, node, state)
+        if up_errs:
+            sys.exit(f"[state_utils] 拒绝 node-finish {node}（上游 {len(up_errs)} 项不满足）：\n  - "
+                     + "\n  - ".join(up_errs))
     # 2.0.0 分阶段归档 + 产物存在性校验：抽成共享函数，保证 round-decide /
     # scope-promote 等"另一条标 completed 的路径"也执行同一套校验（P1-8）。
     require_node_deliverables(
@@ -201,6 +199,13 @@ def cmd_node_finish(args):
             record_exemption(root, "allow-empty-artifacts", node, executor)
         except Exception:
             pass
+    # 状态写入放在全部校验之后：此前 166 行就先写 completed 到内存，
+    # 靠"校验失败 sys.exit 不落盘"保证安全——隐式契约，一旦有人在校验前加
+    # save_state 就会静默写入未校验状态。现在改为校验通过后才置 completed。
+    if not in_iter:
+        state["nodes"][node]["status"] = "completed"
+        state["stages"][stage]["status"] = "completed"
+        state["stages"][stage]["completed_at"] = now_iso()
     # 产物快照登记：级联失效（cascade-invalidate）据此检测上游变更 → 下游联动重置
     state["nodes"][node]["artifact_hash"] = artifact_snapshot(root, node)
     for art in args.artifact or []:
@@ -221,31 +226,35 @@ def cmd_node_finish(args):
 
 
 PLACEHOLDER_NAMES = {".gitkeep", "readme.txt", ".gitignore"}
-# 脚手架预建的模板文件：存在不代表"有产出"。用哨兵字符串判定是否仍是未填写的空模板
-# （比字数阈值可靠：模板本身带说明表格，字数不少但全是占位内容）。
+# 脚手架预建的模板文件：存在不代表"有产出"。用哨兵字符串判定是否仍是未填写的空模板。
+#
+# 哨兵必须取自 state_scaffold.standard_files_content() 实际写入的正文，
+# 否则模板被当成真实产出（实测：modeldocs/reference-list.md 的正文是
+# "# reference-list（参考文献清单）"，不含"待填写/占位"，旧表把它判成已填写）。
+# 每个条目只需命中任一哨兵即视为未填写。
 SCAFFOLD_TEMPLATES = {
     "data/datalog.md": ("产物占位", "待 N2 数据处理后填写"),
-    "resultfigures/figure-list.md": ("待填写", "占位"),
-    "modeldocs/model-framework.md": ("待填写", "占位"),
-    "modeldocs/formula.md": ("待填写", "占位"),
-    "modeldocs/assumption.md": ("待填写", "占位"),
-    "modeldocs/reference-list.md": ("待填写", "占位"),
-    "modeldocs/sensitivity-analysis.md": ("待填写", "占位"),
-    "modeldocs/error-analysis.md": ("待填写", "占位"),
-    "modeldocs/model-validation.md": ("待填写", "占位"),
-    "submissionpackage/参赛提交清单.md": ("待填写", "占位"),
-    "logrecord/daily-log.md": ("待填写", "占位"),
-    "logrecord/bug-fix-log.md": ("待填写", "占位"),
-    "logrecord/version-update.md": ("待填写", "占位"),
-    # P1-10：N1 产物同样是脚手架预建占位
-    "probleminfo/problemnotes.md": ("待填写", "占位"),
-    "probleminfo/keyrequirements.md": ("待填写", "占位"),
+    "resultfigures/figure-list.md": ("由 visualization agent 维护", "| - | - | - | - | - | - | - | - | - | - | - | - |"),
+    "modeldocs/model-framework.md": ("产物占位",),
+    "modeldocs/formula.md": ("产物占位",),
+    "modeldocs/assumption.md": ("产物占位",),
+    "modeldocs/reference-list.md": ("# reference-list（参考文献清单）",),
+    "modeldocs/sensitivity-analysis.md": ("产物占位",),
+    "modeldocs/error-analysis.md": ("产物占位",),
+    "modeldocs/model-validation.md": ("产物占位",),
+    "submissionpackage/参赛提交清单.md": ("| 待核对 |", "由 reviewer（N8 终审）核对生成"),
+    "logrecord/daily-log.md": ("| 日期 | 进度 | 问题 | 解决方案 |",),
+    "logrecord/bug-fix-log.md": ("| 时间 | 现象 | 根因 | 修复 | 关联分支 |",),
+    "logrecord/version-update.md": ("由迭代引擎每轮自动追加",),
+    # N1 产物同样是脚手架预建占位
+    "probleminfo/problemnotes.md": ("待 N1 选题拆解后填写", "产物占位"),
+    "probleminfo/keyrequirements.md": ("产物占位",),
     # N4 代码骨架：stub 里带 NotImplementedError 说明，视为未实现
-    "code/main.py": ("NotImplementedError", "请按"),
-    "code/config.py": ("TODO", "占位"),
+    "code/main.py": ("占位模板", "NotImplementedError"),
+    "code/config.py": ("占位模板", "TODO"),
 }
 # 代码骨架占位：problem_N/*.py 与 visualization/*.py 里的 stub 标记
-CODE_STUB_MARKERS = ("NotImplementedError", "raise NotImplementedError", "TODO: implement")
+CODE_STUB_MARKERS = ("NotImplementedError", "TODO: implement")
 
 
 def _is_filled(path, rel):
@@ -253,24 +262,23 @@ def _is_filled(path, rel):
     base = os.path.basename(path).lower()
     if base in PLACEHOLDER_NAMES:
         return False
+    # 空文件 / 只有空白：不是产出。零字节文件此前被记为"已产出"，
+    # 于是 `touch Data/x.txt` 就能让节点过产物门禁。
+    try:
+        if os.path.getsize(path) == 0:
+            return False
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            body = fh.read()
+    except OSError:
+        return False
+    if not body.strip():
+        return False
     norm = rel.replace("\\", "/").lower()
     markers = SCAFFOLD_TEMPLATES.get(norm)
-    if markers:
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                body = fh.read()
-        except OSError:
-            return False
-        if any(m in body for m in markers):
-            return False
-        return True
+    if markers and any(m in body for m in markers):
+        return False
     # 代码文件：脚手架生成的骨架都带 NotImplementedError/TODO 占位
     if norm.endswith(".py") and ("/problem_" in norm or "/visualization/" in norm):
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                body = fh.read()
-        except OSError:
-            return False
         if any(m in body for m in CODE_STUB_MARKERS):
             return False
     return True
@@ -281,9 +289,13 @@ def _count_node_outputs(root, node):
 
     判定顺序（P1-10 根本方案）：
       1. 若节点记录了 start_snapshot（node-start 时的产物快照），
-         则"真实产出 = 当前快照中与 start_snapshot 不同的文件"——
-         这对脚手架预建文件天然免疫，不需要逐个列哨兵。
+         则"真实产出 = 当前快照中比开工时**新增/变大**的产物根"——
+         对脚手架预建文件天然免疫，不需要逐个列哨兵。
       2. 无快照时退回占位/模板/代码 stub 启发式判定。
+
+    关键约束（回归用）：开工后**删掉**脚手架模板不算产出。
+    此前只比较"不相等"，于是清空产物目录也会被计为 1 个产出。
+    现在要求当前哈希与开工哈希不同，且产物根仍有真实文件。
     """
     paths = [p.strip() for p in NODES[node].get("artifact", "").split(",") if p.strip()]
     start_snapshot = None
@@ -295,11 +307,9 @@ def _count_node_outputs(root, node):
 
     current = artifact_snapshot(root, node)
     if isinstance(start_snapshot, dict) and start_snapshot:
-        # 目录级快照：任一产物根的哈希发生变化即视为有产出
-        changed = [k for k, v in current.items() if start_snapshot.get(k) != v]
-        if changed:
-            return len(changed)
-        return 0
+        changed = [k for k, v in current.items()
+                   if start_snapshot.get(k) != v and _root_has_real_output(root, k)]
+        return len(changed)
 
     total = 0
     for rel_root in paths:
@@ -308,15 +318,30 @@ def _count_node_outputs(root, node):
             if _is_filled(full_root, rel_root):
                 total += 1
         elif os.path.isdir(full_root):
-            for dp, dns, fns in os.walk(full_root):
-                if ".git" in dp.split(os.sep):
-                    dns[:] = []
-                    continue
-                for f in fns:
-                    full = os.path.join(dp, f)
-                    rel = os.path.relpath(full, root)
-                    if _is_filled(full, rel):
-                        total += 1
+            total += _count_real_files(root, full_root)
+    return total
+
+
+def _root_has_real_output(root, rel_root):
+    """产物根当前是否仍有真实文件（用于排除"只删不建"的哈希变化）。"""
+    full_root = os.path.join(root, rel_root)
+    if os.path.isfile(full_root):
+        return _is_filled(full_root, rel_root)
+    if os.path.isdir(full_root):
+        return _count_real_files(root, full_root) > 0
+    return False
+
+
+def _count_real_files(root, full_dir):
+    total = 0
+    for dp, dns, fns in os.walk(full_dir):
+        if ".git" in dp.split(os.sep):
+            dns[:] = []
+            continue
+        for f in fns:
+            full = os.path.join(dp, f)
+            if _is_filled(full, os.path.relpath(full, root)):
+                total += 1
     return total
 
 
@@ -397,7 +422,11 @@ def require_node_deliverables(root, node, allow_empty=False, allow_no_checkpoint
             sys.exit(
                 f"[state_utils] 拒绝：节点 {node}（{NODES[node]['name']}）声明的产物目录 "
                 f"{NODES[node]['artifact']} 下没有任何实际产出文件。\n"
-                f"  禁止「空产物标完成」——请先产出本节点应有的交付物。"
+                f"  禁止「空产物标完成」——请先产出本节点应有的交付物。\n"
+                f"  判定口径：空文件、纯空白、脚手架预建模板（未替换占位内容）、"
+                f"仍带 NotImplementedError 的代码 stub 都不算产出；"
+                f"开工后仅删掉模板同样不算产出。\n"
+                f"  先用 node-log 记录进展、checkpoint 落快照，再重跑本命令。"
             )
 
 
@@ -465,7 +494,8 @@ def cmd_todo(args):
         print(f"[state_utils] todo done: {pat}")
     elif action == "plan":
         if not os.path.exists(os.path.join(root, STATE_FILE)):
-            sys.exit(f"[state_utils] 项目未初始化：{root}；请先运行 init")
+            sys.exit(f"[state_utils] 项目未初始化：{root}\n"
+                     f"  请先运行: python state/state_utils.py init --dir {root} --name <竞赛名称>")
         state = load_state(root)
         nodes, gates = state.get("nodes", {}), state.get("gates", {})
         added, done = 0, 0

@@ -33,12 +33,17 @@ class MCPGatesTest(unittest.TestCase):
 
     def run_state(self, *args, check=True):
         argv = list(args)
-        # 本文件用例验证门禁/评分逻辑，不验证交付物产出；
-        # 交付物校验由 tests/test_v2_gates.py 的 IterationDeliverableTest 覆盖。
-        if argv and argv[0] == "round-decide":
-            for flag in ("--allow-empty-artifacts", "--allow-no-checkpoint"):
-                if flag not in argv:
-                    argv.append(flag)
+        # 本文件用例验证门禁/评分逻辑，不验证交付物产出，也不搭建完整上游链；
+        # 交付物校验由 tests/test_v2_gates.py 的 IterationDeliverableTest 覆盖，
+        # 上游完成守卫由 test_v2_gates 的分阶段用例覆盖。
+        if argv:
+            if argv[0] == "round-decide":
+                for flag in ("--allow-empty-artifacts", "--allow-no-checkpoint"):
+                    if flag not in argv:
+                        argv.append(flag)
+            if argv[0] in ("round-start", "round-decide", "result-ingest"):
+                if "--skip-prereq" not in argv:
+                    argv.append("--skip-prereq")
         return subprocess.run(["python", str(STATE), *argv], text=True, capture_output=True, check=check)
 
     def lock_problem(self):
@@ -95,7 +100,8 @@ class MCPGatesTest(unittest.TestCase):
     def test_n1_node_review_pass_allows_explicit_exemption(self):
         r = self.run_state("node-review", "N1", "--agent", "reviewer", "--result", "PASS",
                            "--skills", "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
-                           "--allow-missing-mcp", "--dir", str(self.project))
+                           "--allow-missing-mcp", "--evidence", "ProblemInfo/ProblemNotes.md",
+                           "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 
     def test_n2_node_review_pass_not_gated_by_mcp(self):
@@ -221,7 +227,7 @@ class MCPGatesTest(unittest.TestCase):
         r = self.run_state("round-score", "N8", "--round", "1", "--total", "8",
                            "--dims", '{"假设合理性":8,"建模创造性":8,"结果正确性":8,"表述清晰性":8,"格式规范性":8}',
                            "--judge", "reviewer",
-                           "--skills-read", "academic-orchestrator:mm-self-review,academic-orchestrator:figure-table-benchmark",
+                           "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-latex-writing,academic-orchestrator:mm-self-review",
                            "--evidence", "ReportPaper/LaTeX/main.tex", "--dir", str(self.project))
         self.assertEqual(r.returncode, 0, r.stderr)
 

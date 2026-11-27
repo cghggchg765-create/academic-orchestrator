@@ -3,7 +3,7 @@ name: mm-help
 description: 数学建模多智能体系统总览与使用指引（文档参考入口）
 ---
 
-输出学术科研编排核心（academic-orchestrator v2.0.0，21 Agent / 23 Skill / 7 命令）的使用总览，按用户语言（中文优先）回复：
+输出学术科研编排核心（academic-orchestrator v2.0.0，21 Agent / 25 Skill / 7 命令）的使用总览，按用户语言（中文优先）回复：
 
 1. **全流程**：输入 `/mathematical-modeling` 或"帮我做国赛数学建模"触发主控 Skill；开工前必须过 `/mm-boot`（MCP Checkpoint 0 门禁）；orchestrator 按 9 阶段（Phase 0-8）委托执行（每节点验证上游→按需 Deep Research→自检→配对独立审阅→FAIL 修复≤2次→超限升级→产物落盘）。
 2. **单独调用节点**：说出"代码迭代 / 论文修改 / 只画图 / 敏感性分析"等意图，节点 Agent 自治联动（检查前置→执行→配对审阅→修复→交付）。指定“第几问/某章/某节”时先走 `scope-plan --round <n>`，避免整篇上下文稀释。

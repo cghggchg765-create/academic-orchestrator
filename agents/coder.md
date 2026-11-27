@@ -224,7 +224,7 @@ Code/
 
 ### Phase 6: 状态契约收尾（DECIDE 交接）
 
-1. 写 `state/agents/coder/result.json`：`{agent, node, round, artifacts[], run{exit_code, checks[], seconds}, performance_review{baseline_seconds, optimized_seconds, speedup, gpu_used, hot_spots[], result_unchanged}, case_refs[], summary}`（performance_review 为性能自审结论，mm-code-reviewer 效率维度证据）
+1. 写 `state/agents/coder/result.json`：`{agent, node, round, artifacts[], corrections_ack[], run{exit_code, checks[], seconds}, performance_review{baseline_seconds, optimized_seconds, speedup, gpu_used, hot_spots[], result_unchanged}, case_refs[], summary}`（performance_review 为性能自审结论，mm-code-reviewer 效率维度证据；`corrections_ack` 仅在收到主 Agent `[纠正]` 时必填，协议见 `skills/academic-orchestration/SKILL.md` §D）
 2. 刷新 N4 节点首页：`python state/state_utils.py node-finish N4 --agent coder --artifact Code/main.py --artifact Code/output/...`（登记关键产物）
 3. 输出 `[REVIEW-REQUEST] 节点=N4, 建议=mm-code-reviewer`（或直接委派 mm-code-reviewer 审阅）
 4. 收下审阅 feedback 后：本轮未达标 → 反馈内容即下一轮 goal，交给 orchestrator 开启 round{N+1}

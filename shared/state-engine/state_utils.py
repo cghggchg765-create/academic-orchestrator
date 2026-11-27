@@ -126,6 +126,8 @@ def main():
                    help="允许产物目录为空时仍标完成（仅异常情况，须说明原因并留痕）")
     p.add_argument("--allow-no-checkpoint", action="store_true",
                    help="允许无进度快照时标完成（仅单步节点，须说明原因并留痕）")
+    p.add_argument("--skip-prereq", action="store_true",
+                   help="跳过未开工/上游完成守卫（仅单测/历史项目迁移，会写 meta.prereq_skips 留痕）")
     p.set_defaults(func=cmd_node_finish)
 
     p = sub.add_parser("node-review", help="登记节点审阅记录（审阅 Agent 调用；FAIL/BLOCKED 必须附 evidence）")
@@ -171,7 +173,14 @@ def main():
 
     p = sub.add_parser("result-ingest", help="验证并将 result.json 摘要合并到状态")
     p.add_argument("result", help="result.json 路径"); p.add_argument("--node"); p.add_argument("--run-id"); p.add_argument("--scope-id")
-    p.add_argument("--dir", default="."); p.set_defaults(func=cmd_result_ingest)
+    p.add_argument("--dir", default=".")
+    p.add_argument("--allow-empty-artifacts", action="store_true",
+                   help="完成时豁免空产物校验")
+    p.add_argument("--allow-no-checkpoint", action="store_true",
+                   help="完成时豁免进度快照校验")
+    p.add_argument("--skip-prereq", action="store_true",
+                   help="完成时跳过完成守卫（仅供单测/迁移；会留痕）")
+    p.set_defaults(func=cmd_result_ingest)
 
     p = sub.add_parser("project-audit", help="接手审计：题目比对/标准结构/节点首页/registry/状态-产物一致性/旧命名")
     p.add_argument("--source", help="题目原文路径（可选，与 problem_lock 比对）")
@@ -195,6 +204,8 @@ def main():
     p = sub.add_parser("round-start", help="开启一轮迭代（可选建分支；仅 N4/N5/N7/N8）")
     p.add_argument("node"); p.add_argument("--goal"); p.add_argument("--branch"); p.add_argument("--scope-id")
     p.add_argument("--git", action="store_true"); p.add_argument("--dir", default=".")
+    p.add_argument("--skip-prereq", action="store_true",
+                   help="跳过上游前置校验（仅供单测/迁移构造场景；会在 meta.prereq_skips 留痕）")
     p.set_defaults(func=cmd_round_start)
 
     p = sub.add_parser("round-score", help="记录一轮独立评分（仅 N4/N5/N7/N8）")
@@ -219,6 +230,8 @@ def main():
                    help="完成分支豁免空产物校验（仅异常情况，须说明原因）")
     p.add_argument("--allow-no-checkpoint", action="store_true",
                    help="完成分支豁免进度快照校验（仅单步节点，须说明原因）")
+    p.add_argument("--skip-prereq", action="store_true",
+                   help="完成分支跳过完成守卫（仅供单测构造场景；会留痕）")
     p.set_defaults(func=cmd_round_decide)
 
     p = sub.add_parser("scope-plan", help="为 N4/N5/N7/N8 创建可选作用域工作区与派发计划")
@@ -339,6 +352,72 @@ def main():
     p.add_argument("--latest", action="store_true", help="只输出最近一条")
     p.add_argument("--dir", default=".")
     p.set_defaults(func=cmd_checkpoint_list)
+
+    # ---- 运行中纠正协议（主→子纠正留痕 / 子→主回执 / 派发句柄生命周期）----
+    p = sub.add_parser("correction-add",
+                       help="记录一条运行中纠正（主 Agent 调用；A3/B1 据此校验 CORRECTION_UNACKED）")
+    p.add_argument("node", choices=list(NODES))
+    p.add_argument("--agent", required=True, help="被纠正的子 Agent（agent_id，回执必须由本人提交）")
+    p.add_argument("--type", required=True,
+                   help="纠正类型：需求变更/前提失效/范围纠正/门禁风险/冲突消解（也接受 requirement_change 等 code）")
+    p.add_argument("--finding", required=True, help="主 Agent 观察到的事实与证据路径")
+    p.add_argument("--requirement", required=True, help="本次必须如何调整；是否需要重跑")
+    p.add_argument("--impact", default="", help="受影响的后续节点/产物")
+    p.add_argument("--round", type=int, help="迭代轮次（可选）")
+    p.add_argument("--delivery", choices=["steered", "queued", "resumed_background"], default="queued",
+                   help="SendMessage 投递语义（默认 queued）")
+    p.add_argument("--by", default="main-agent", help="登记人（默认 main-agent）")
+    p.add_argument("--note", default="")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_correction_add)
+
+    p = sub.add_parser("correction-ack",
+                       help="回执一条纠正（子 Agent 本人调用；agent_id 必须与纠正记录一致，代签无效）")
+    p.add_argument("correction_id", help="correction-add 返回的 correction_id")
+    p.add_argument("--agent", required=True, help="回执人（必须等于纠正记录的 agent_id）")
+    p.add_argument("--note", default="", help="如何落实/是否需要重跑")
+    p.add_argument("--by", default="")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_correction_ack)
+
+    p = sub.add_parser("correction-list", help="列出纠正留痕与回执状态（未回执的即 CORRECTION_UNACKED）")
+    p.add_argument("--node", choices=list(NODES))
+    p.add_argument("--unacked", action="store_true", help="只列未回执条目")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_correction_list)
+
+    p = sub.add_parser("dispatch-start",
+                       help="登记后台派发句柄 state/agents/<id>/dispatch.json（防僵尸 + 回收核对）")
+    p.add_argument("agent_id")
+    p.add_argument("--node", required=True, choices=list(NODES))
+    p.add_argument("--round", type=int)
+    p.add_argument("--must-load", default="", help="本批 must_load 技能清单，逗号分隔")
+    p.add_argument("--writes", default="",
+                   help="本 Agent 的写入目标（文件或目录，逗号分隔）——用于并行写冲突检测")
+    p.add_argument("--task", default="", help="派发子任务摘要")
+    p.add_argument("--ttl", type=int, default=1800, help="僵尸判定阈值秒数（默认 1800）")
+    p.add_argument("--force", action="store_true", help="接管仍 running 的旧句柄（原 Agent 已失联）")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_dispatch_start)
+
+    p = sub.add_parser("dispatch-heartbeat", help="续期派发句柄（长任务主动报活）")
+    p.add_argument("agent_id")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_dispatch_heartbeat)
+
+    p = sub.add_parser("dispatch-close",
+                       help="收尾派发句柄（done/failed/timeout/cancelled；--artifact 记产物哈希供回收核对）")
+    p.add_argument("agent_id")
+    p.add_argument("--status", required=True, choices=["done", "failed", "timeout", "cancelled"])
+    p.add_argument("--artifact", action="append", default=[], help="产物路径（可多次传，自动算 sha256）")
+    p.add_argument("--note", default="")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_dispatch_close)
+
+    p = sub.add_parser("dispatch-list", help="列出派发句柄（running/已收尾/僵尸）")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_dispatch_list)
 
     p = sub.add_parser("register-artifact", help="登记产物入库记录（文件必须落在节点产物目录内，否则拒绝）")
     p.add_argument("node", choices=list(NODES))

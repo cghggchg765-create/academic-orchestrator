@@ -75,10 +75,27 @@ def field_text(case: dict[str, Any]) -> str:
     ])
 
 
+def _case_year(case: dict[str, Any]) -> int | None:
+    """案例年份归一化：缺失/非数字时返回 None，由调用方决定排序与过滤策略。
+
+    原实现直接 int(case["year"])：案例库 index.json 是外部数据，任一卡片缺 year
+    或写成 "2020年" 之类，score_cases 排序键就抛 KeyError/ValueError，
+    整条 case-search 命令崩掉（连 --json 都拿不到结果）。
+    """
+    value = case.get("year")
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def score_cases(query: str, cases: list[dict[str, Any]]) -> list[tuple[float, dict[str, Any], list[str]]]:
     """TF-IDF 风格加权：tag: 术语权重更高；查询中显式出现的类型/模型名额外加分。
 
-    返回 [(score, case, matched_tokens)]，按分数降序、年份降序、case_id 升序。"""
+    返回 [(score, case, matched_tokens)]，按分数降序、年份降序、case_id 升序。
+    缺 year 的案例年份按 0 处理（排在同年段之后），而不是让整个检索崩掉。"""
     query_tokens = tokens(query)
     if not query_tokens:
         return []
@@ -106,7 +123,8 @@ def score_cases(query: str, cases: list[dict[str, Any]]) -> list[tuple[float, di
                 score += 4.0
         if score > 0:
             ranked.append((score, case, sorted(set(matched))))
-    ranked.sort(key=lambda item: (-item[0], -int(item[1]["year"]), item[1]["case_id"]))
+    ranked.sort(key=lambda item: (-item[0], -(_case_year(item[1]) or 0),
+                                  str(item[1].get("case_id") or "")))
     return ranked
 
 
@@ -157,10 +175,13 @@ def load_cases(index_path: str | os.PathLike) -> list[dict[str, Any]]:
 
 def filter_cases(cases: list[dict[str, Any]], year: int | None = None,
                  problem_type: str | None = None, model: str | None = None) -> list[dict[str, Any]]:
-    """按年份/问题类型/模型过滤；问题类型与模型使用归一化子串匹配。"""
+    """按年份/问题类型/模型过滤；问题类型与模型使用归一化子串匹配。
+
+    缺 year 或 year 非数字的卡片在 ``--year`` 过滤时被排除（而不是抛 KeyError）。
+    """
     out = cases
     if year is not None:
-        out = [case for case in out if int(case["year"]) == year]
+        out = [case for case in out if _case_year(case) == year]
     if problem_type:
         needle = normalize(problem_type)
         out = [case for case in out if needle in normalize(" ".join(case.get("problem_types") or []))]

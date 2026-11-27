@@ -1,0 +1,334 @@
+{
+  "version": "1.0",
+  "updated": "2026-11-26",
+  "note": "能力地图：只存角色、能力边界、输入输出、交接与依赖，不存子技能流程。路径统一指向 zcode 入口；豆包通过 Junction 引用同一入口。 ｜ 2.0.0 可移植化：path/entry 改用 $SKILLS_ROOT/<name>，多根运行时解析；已移除特定平台根（不再需要双根 Junction）。",
+  "stage_order": [
+    "V0",
+    "V0e",
+    "V1",
+    "V2"
+  ],
+  "presets": [
+    {
+      "name": "academic_zh_defensive_plus_ai",
+      "when": "中文论文/摘要/引言/结论/rebuttal 既有防御性叙事，又有 AI 味",
+      "sequence": [
+        {
+          "stage": "V0",
+          "role": "narrative"
+        },
+        {
+          "stage": "V2",
+          "role": "edit"
+        }
+      ],
+      "note": "V0 只改叙事与主张范围；V2 只做表面最小编辑。需要先评分/诊断时，V1 只诊断，不改稿。"
+    },
+    {
+      "name": "academic_en_defensive_plus_ai",
+      "when": "英文论文/摘要/引言/结论/rebuttal 既有防御性叙事，又有 AI 味",
+      "sequence": [
+        {
+          "stage": "V0e",
+          "role": "narrative"
+        },
+        {
+          "stage": "V1",
+          "role": "rewrite"
+        }
+      ],
+      "note": "V0e 只改叙事；V1 做英文表面去味，不改事实与限定。"
+    },
+    {
+      "name": "diagnose_then_edit_zh",
+      "when": "中文文本需要先知道哪里假、为什么假，再最小编辑",
+      "sequence": [
+        {
+          "stage": "V1",
+          "role": "diagnose"
+        },
+        {
+          "stage": "V2",
+          "role": "edit"
+        }
+      ],
+      "note": "V1 只出诊断/评分/优先级；V2 执行编辑，两者不得同时改写。"
+    },
+    {
+      "name": "general_zh_ai",
+      "when": "中文非学术文本只要去 AI 味，且不需要评分/平台适配",
+      "sequence": [
+        {
+          "stage": "V2",
+          "role": "edit"
+        }
+      ],
+      "note": "需要作者声音、平台适配、评分或体裁判断时改走 V1。"
+    },
+    {
+      "name": "general_ai_signal",
+      "when": "一般文本/社媒/英文文本需要 AI 味诊断、改写、评分或 prompt 防御",
+      "sequence": [
+        {
+          "stage": "V1",
+          "role": "diagnose"
+        }
+      ],
+      "note": "V1 可诊断并改写；若同时需要中文最小编辑，V1 只诊断，V2 执行。"
+    }
+  ],
+  "selection_policy": {
+    "hard_constraints": [
+      "language",
+      "text_type",
+      "task_mode",
+      "integrity",
+      "goal"
+    ],
+    "score_scale": {
+      "3": "完全命中",
+      "2": "可承接但需分工",
+      "1": "兜底",
+      "0": "不匹配或硬冲突"
+    },
+    "tie_break": [
+      "hard_constraints",
+      "language",
+      "task_stage",
+      "genre_audience",
+      "edit_scope",
+      "cost"
+    ],
+    "stars_usage": "not used as hard constraint; maturity only"
+  },
+  "skills": [
+    {
+      "slot": "V0",
+      "stage": "V0",
+      "name": "anti-defensive-writing",
+      "path": "$SKILLS_ROOT/anti-defensive-writing",
+      "entry": "$SKILLS_ROOT/anti-defensive-writing/SKILL.md",
+      "repo": "local/anti-defensive-writing-Skill (non-git)",
+      "stars": 0,
+      "maturity": "installed-local",
+      "role": "narrative",
+      "roots": [
+        "zcode"
+      ],
+      "best_at": [
+        "中文学术写作的防御性叙事重构",
+        "识别真正可发表的优势并围绕它组织主线",
+        "阻止主动示弱、实验流水账、替审稿人攻击自己",
+        "摘要/引言/结论/rebuttal/实验组织的叙事顺序"
+      ],
+      "inputs": [
+        "中文论文/摘要/引言/结论/rebuttal/实验组织",
+        "目标期刊或场合",
+        "必须保留的真实局限与证据"
+      ],
+      "outputs": [
+        "叙事诊断",
+        "重构方案",
+        "改写稿或章节结构",
+        "交稿前自查清单"
+      ],
+      "not_for": [
+        "英文文本（走 V0e）",
+        "纯语法/翻译/格式",
+        "非学术社媒文案",
+        "删真实局限或伪造优势"
+      ],
+      "done_when": [
+        "核心优势已识别并写明",
+        "主张与证据对齐，比较范围被控制",
+        "真实局限/相反证据未被隐藏",
+        "子技能自带自查完成并回报"
+      ],
+      "requires_files": [
+        "SKILL.md"
+      ],
+      "depends": [],
+      "fallback": [
+        "V0 不可用 → V1 只做表面去味；明确“未做防御性叙事重构”"
+      ]
+    },
+    {
+      "slot": "V0e",
+      "stage": "V0e",
+      "name": "anti-defensive-writing-en",
+      "path": "$SKILLS_ROOT/anti-defensive-writing-en",
+      "entry": "$SKILLS_ROOT/anti-defensive-writing-en/SKILL.md",
+      "repo": "local/anti-defensive-writing-Skill (non-git)",
+      "stars": 0,
+      "maturity": "installed-local",
+      "role": "narrative",
+      "roots": [
+        "zcode"
+      ],
+      "best_at": [
+        "English academic defensive-narrative restructuring",
+        "press-conference framing, strength-first storyline",
+        "no self-undermining, no lab-log narration, no reviewer self-attack",
+        "abstract/introduction/conclusion/rebuttal/experiment ordering"
+      ],
+      "inputs": [
+        "English manuscript/abstract/introduction/conclusion/rebuttal/experiment section",
+        "target venue",
+        "limitations and evidence that must stay"
+      ],
+      "outputs": [
+        "narrative diagnosis",
+        "restructure plan",
+        "revised draft or section outline",
+        "pre-submission checklist"
+      ],
+      "not_for": [
+        "Chinese text (use V0)",
+        "language-only polishing",
+        "non-academic text",
+        "deleting real limitations or inventing strengths"
+      ],
+      "done_when": [
+        "core strength is identified and explicit",
+        "claims and evidence are aligned; comparison scope is controlled",
+        "real limitations/counterevidence remain visible",
+        "child skill's own checklist completed and reported"
+      ],
+      "requires_files": [
+        "SKILL.md"
+      ],
+      "depends": [],
+      "fallback": [
+        "V0e 不可用 → V1 做英文表面去味；明确“未做英文叙事重构”"
+      ]
+    },
+    {
+      "slot": "V1",
+      "stage": "V1",
+      "name": "doubao-human-signal",
+      "path": "$SKILLS_ROOT/doubao-human-signal",
+      "entry": "$SKILLS_ROOT/doubao-human-signal/SKILL.md",
+      "repo": "doubao builtin (non-git)",
+      "stars": 0,
+      "maturity": "builtin-validated",
+      "role": "diagnose",
+      "best_at": [
+        "AI 味成因层诊断（观点/结构/表达/素材/叙事/情感/语境）",
+        "作者声音与体裁/平台/受众适配",
+        "生成、改写、评分与 prompt 防御",
+        "中英文通用文本"
+      ],
+      "inputs": [
+        "文本/草稿/文档",
+        "体裁/平台/受众/公开度",
+        "作者声音样本（可选）",
+        "改写强度"
+      ],
+      "outputs": [
+        "AI 味诊断/评分",
+        "改写稿",
+        "prompt 防御规则",
+        "修改优先级清单"
+      ],
+      "not_for": [
+        "纯语法/翻译/摘要/扩写/格式",
+        "正式合规文本强行人感化",
+        "AI 检测规避",
+        "非文本任务"
+      ],
+      "done_when": [
+        "子技能准出评分完成并回报",
+        "事实、数字、引用、限定条件保留",
+        "没有为“人感”编造细节",
+        "体裁/平台/受众没有错配"
+      ],
+      "requires_files": [
+        "SKILL.md",
+        "references/evaluation.md",
+        "references/patterns.md",
+        "references/input-contract.md",
+        "references/prompt-defense.md"
+      ],
+      "depends": [],
+      "fallback": [
+        "V1 不可用 → 中文散文用 V2；英文/平台/评分场景报告能力缺口"
+      ],
+      "roots": [
+        "builtin"
+      ],
+      "optional": true,
+      "note": "豆包内置技能；非豆包宿主不存在属正常，不计入失败"
+    },
+    {
+      "slot": "V2",
+      "stage": "V2",
+      "name": "humanizer-zh",
+      "path": "$SKILLS_ROOT/humanizer-zh",
+      "entry": "$SKILLS_ROOT/humanizer-zh/SKILL.md",
+      "repo": "local/Humanizer-zh (non-git)",
+      "stars": 0,
+      "maturity": "installed-local",
+      "role": "edit",
+      "roots": [
+        "zcode"
+      ],
+      "best_at": [
+        "中文空话、重复、模板化表达",
+        "31 类中文编辑模式",
+        "最小编辑，保留事实、限定与作者声音",
+        "文件保护与交付前语义核对"
+      ],
+      "inputs": [
+        "中文文章/评论/文档",
+        "编辑范围",
+        "作者声音样本（可选）",
+        "必须保留内容"
+      ],
+      "outputs": [
+        "最终改写稿",
+        "必要说明",
+        "仅在要求时写回文件"
+      ],
+      "not_for": [
+        "英文",
+        "从零创作",
+        "扩写/摘要/翻译/语法/格式",
+        "学术叙事重构",
+        "删真实限定或伪造细节"
+      ],
+      "done_when": [
+        "原文信息、否定、限定、归因完整",
+        "没有新增原文没有的具体信息",
+        "文体与作者声音匹配",
+        "子技能交付前核对完成并回报"
+      ],
+      "requires_files": [
+        "SKILL.md"
+      ],
+      "depends": [],
+      "fallback": [
+        "V2 不可用 → V1 做中文去味；明确“非最小编辑路线”"
+      ]
+    }
+  ],
+  "fallbacks": [
+    {
+      "when": "V0/V0e 不可用",
+      "use": "V1 表面去味",
+      "installed": true,
+      "note": "只能处理 AI 味，不能声称已完成防御性叙事重构"
+    },
+    {
+      "when": "V2 不可用",
+      "use": "V1 中文去味",
+      "installed": true,
+      "note": "不是最小编辑路线，可能改动幅度更大"
+    },
+    {
+      "when": "V1 不可用",
+      "use": "V2 中文散文最小编辑",
+      "installed": true,
+      "note": "仅覆盖中文散文；英文/平台/评分场景报告缺口"
+    }
+  ]
+}

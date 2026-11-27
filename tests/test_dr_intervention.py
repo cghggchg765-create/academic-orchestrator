@@ -32,7 +32,17 @@ class DRInterventionTest(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def run_state(self, *args, check=True):
-        return subprocess.run(["python", str(STATE), *args], text=True, capture_output=True, check=check)
+        argv = list(args)
+        # 本文件用例只验证干预记录/评分汇总，不搭建完整上游链；
+        # 上游完成守卫由 test_v2_gates 的分阶段用例覆盖。
+        if argv and argv[0] in ("round-start", "round-decide", "result-ingest"):
+            if "--skip-prereq" not in argv:
+                argv.append("--skip-prereq")
+        if argv and argv[0] == "round-decide":
+            for flag in ("--allow-empty-artifacts", "--allow-no-checkpoint"):
+                if flag not in argv:
+                    argv.append(flag)
+        return subprocess.run(["python", str(STATE), *argv], text=True, capture_output=True, check=check)
 
     def lock_problem(self):
         problem = self.tmp / "problem.md"

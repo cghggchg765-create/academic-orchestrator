@@ -182,7 +182,7 @@ def check_version_alignment() -> None:
 #     subagent-driven-development / drawio-skill / make-pdf / investigate），
 #     能力需求改由 mm-skill-router 运行时扫描发现，不再打包分发。
 # 改这个数字前先确认 skills/ 与 agents/ 实际文件数，并用 lint 反向校验。
-EXPECTED_COUNTS = {"skills": 23, "agents": 21, "commands": 7}
+EXPECTED_COUNTS = {"skills": 25, "agents": 21, "commands": 7}
 
 
 def check_component_counts() -> None:
@@ -195,6 +195,32 @@ def check_component_counts() -> None:
         error(f"skills/ 应为 {EXPECTED_COUNTS['skills']} 个 Skill 包，实际 {len(skills)}")
 
 
+# 用户直接读到的组件口径文案所在文件（归档文档刻意排除：历史记录不改写）
+COUNT_DOCS = ("README.md", "能力盘点.md", "commands/mm-help.md")
+
+
+def check_documented_counts() -> None:
+    """文档里写的 "N Agent / M Skill / K 命令" 必须与 EXPECTED_COUNTS 一致。
+
+    回归用：实际 25 个 skill，但 README / 能力盘点 / mm-help 长期写 23，
+    lint 只断言目录数量、不比对文案，于是漂移无人发现，用户看到的口径是错的。
+    """
+    import re as _re
+    want = (EXPECTED_COUNTS["agents"], EXPECTED_COUNTS["skills"], EXPECTED_COUNTS["commands"])
+    pattern = _re.compile(r"(\d+)\s*Agent\s*/\s*(\d+)\s*Skill\s*/\s*(\d+)\s*命令")
+    for rel in COUNT_DOCS:
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in pattern.finditer(text):
+            got = tuple(int(match.group(i)) for i in (1, 2, 3))
+            if got != want:
+                line_no = text[:match.start()].count("\n") + 1
+                error(f"{rel}:{line_no} 组件口径写 {got[0]} Agent / {got[1]} Skill / {got[2]} 命令，"
+                      f"应为 {want[0]} / {want[1]} / {want[2]}（与 EXPECTED_COUNTS 一致）")
+
+
 def check_no_big_archives_tracked() -> None:
     """大型压缩包不允许进入 git 跟踪（仓库卫生）。"""
     import subprocess
@@ -204,9 +230,42 @@ def check_no_big_archives_tracked() -> None:
             error(f"大型压缩包被 git 跟踪: {line}")
 
 
+def check_documented_commands_exist() -> None:
+    """文档里出现的 `state_utils.py <cmd>` 必须是真实注册的子命令。
+
+    回归用：skills/academic-orchestration 长期写"写入 dispatch.json / corrections.jsonl"，
+    却从未点名 CLI 入口——反过来文档也可能写出不存在的命令名（幻觉命令）。
+    这里只做"名字存在性"校验（不执行命令，避免副作用与速度问题）。
+    """
+    import re as _re
+    import subprocess as _sp
+    help_out = _sp.run([sys.executable, str(ROOT / "shared" / "state-engine" / "state_utils.py"), "--help"],
+                       capture_output=True, text=True)
+    match = _re.search(r"\{([a-z0-9,\-]+)\}", help_out.stdout or "")
+    if not match:
+        error("无法解析 state_utils.py 的可用子命令列表")
+        return
+    real = set(match.group(1).split(","))
+    pattern = _re.compile(r"state_utils\.py`?\s+([a-z][a-z0-9-]*)")
+    scan = [ROOT / "README.md", ROOT / "能力盘点.md", ROOT / "commands"]
+    scan += [ROOT / "skills", ROOT / "agents", ROOT / "docs"]
+    for target in scan:
+        files = [target] if target.is_file() else [
+            p for p in target.rglob("*.md") if ".venv" not in str(p)]
+        for path in files:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for m in pattern.finditer(text):
+                cmd = m.group(1)
+                if cmd not in real:
+                    line_no = text[:m.start()].count("\n") + 1
+                    rel = path.relative_to(ROOT)
+                    error(f"{rel}:{line_no} 引用了不存在的子命令 `{cmd}`（state_utils.py 无此命令）")
+
+
 def check_naming_redlines() -> None:
     """命名红线（回归防护）：状态目录必须为 state；标准文件名不允许下划线或数字前缀。
-
     只检查"文件名/路径形态"的旧名（带后缀或作为目录段），不检查裸单词，
     避免误伤代码标识符（append_version_update）与协议枚举（error_analysis_failure）。
     """
@@ -471,8 +530,12 @@ def check_user_level_sync() -> None:
 def check_gates_registry() -> None:
     """门禁登记单一事实源：shared/contracts/gates-registry.json ↔ state_defs NODES.gates。
 
-    防漂移：登记表里出现的门禁必须被某节点声明，节点声明的门禁也必须在登记表里有定义。
-    B1 这类跨节点门禁在登记表中以 "N6,N7,N8" 声明，逐个节点比对。
+    三层比对（缺任一层都会出现"改一处、另一处照旧生效"的双份事实源）：
+      ① 门禁 id 集合：登记表 ↔ NODES 使用集合；
+      ② 归属节点：登记表每条的 `node` 字段（可逗号分隔，如 B1 = "N6,N7,N8"）
+         必须与该门禁在 NODES 里被哪些节点声明完全一致；
+      ③ 必要字段齐全。
+    ② 此前是个只 strip 不比较的空循环，于是把 B1 的 node 改成 N5 也能 lint 通过。
     """
     reg_path = ROOT / "shared" / "contracts" / "gates-registry.json"
     if not reg_path.exists():
@@ -480,16 +543,17 @@ def check_gates_registry() -> None:
         return
     reg = json.loads(reg_path.read_text(encoding="utf-8"))
     declared = set()
+    declared_nodes: dict[str, set[str]] = {}
     for g in reg.get("gates", []):
         gid = g.get("id")
         if not gid:
             error("门禁登记表存在无 id 的条目")
             continue
         declared.add(gid)
-        for node in str(g.get("node", "")).split(","):
-            node = node.strip()
-            if not node:
-                continue
+        nodes = {n.strip() for n in str(g.get("node", "")).split(",") if n.strip()}
+        if not nodes:
+            error(f"门禁 {gid} 未声明归属节点（node 字段为空）")
+        declared_nodes[gid] = nodes
         for key in ("timing", "kind", "blocking", "criterion", "producer"):
             if not g.get(key):
                 error(f"门禁 {gid} 缺字段 {key}")
@@ -497,15 +561,73 @@ def check_gates_registry() -> None:
     spec = importlib.util.spec_from_file_location("mm_state_utils_g", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    used = set()
+    used: dict[str, set[str]] = {}
     for node_id, info in module.NODES.items():
         for gate in info.get("gates", []):
-            used.add(gate)
+            used.setdefault(gate, set()).add(node_id)
     # 迭代动态门禁（S<n>-Nx）不静态登记
-    for gate in sorted(used - declared):
+    for gate in sorted(set(used) - declared):
         error(f"门禁 {gate} 在 NODES 中被使用但未登记于 gates-registry.json")
-    for gate in sorted(declared - used):
+    for gate in sorted(declared - set(used)):
         error(f"门禁 {gate} 已登记于 gates-registry.json 但无任何节点使用（孤儿门禁）")
+    # 归属节点逐条比对：登记表说属于哪些节点，NODES 就必须在哪些节点声明它
+    for gate in sorted(declared & set(used)):
+        if declared_nodes.get(gate) != used[gate]:
+            error(f"门禁 {gate} 归属节点漂移：gates-registry.json 写 "
+                  f"{sorted(declared_nodes.get(gate) or [])}，"
+                  f"NODES 实际在 {sorted(used[gate])} 声明")
+    # 审阅类门禁的 producer 必须是该节点的合法审阅者（三份事实源：登记表 producer /
+    # NODES.reviewer + secondary_reviewers / agents/*.md）。任一处改名而其余未跟，
+    # 运行时 node-review 会拒掉"登记表说要它出结论"的那个 Agent。
+    #
+    # 匹配必须按整词，不能按子串：'reviewer' 是 'mm-viz-reviewer' 的子串，
+    # 子串匹配会让把 W2 的 producer 写成 mm-viz-reviewer 也通过。
+    for g in reg.get("gates", []):
+        if g.get("kind") != "review" or not g.get("id"):
+            continue
+        producer_tokens = {t for t in re.split(r"[+\s,]+", str(g.get("producer") or "")) if t}
+        for node_id in declared_nodes.get(g["id"], set()):
+            allowed = set(module.expected_reviewers(node_id)) if node_id in module.NODES else set()
+            if allowed and not (allowed & producer_tokens):
+                error(f"门禁 {g['id']} 的 producer「{g.get('producer')}」不是节点 {node_id} 的合法审阅者"
+                      f"（NODES 允许 {sorted(allowed)}）——登记表与节点定义漂移")
+
+
+def check_mcp_requirement_contract() -> None:
+    """MCP 必调表结构契约（防"说明文字与机器判定各写一份"）。
+
+    NODES 里没有 mcp_required 字段，因此"哪些节点必须调 MCP"只能由
+    state_defs.MCP_MANDATORY_NODES 这一张表定义。该表必须满足：
+      ① 每个条目同时带人类可读 desc 与机器判定用的 all/any token 组；
+      ② all 与 any 不能同时为空（否则任何留痕都能满足 = 门禁形同摆设）；
+      ③ 键必须是 NODES 里的真实节点。
+    此前 desc 与 token 组是两张分开维护的表，改一处就会让"报错说要 paper-mcp、
+    实际校验查别的"，而且任何一条都能被静默漏掉。
+    """
+    source = ROOT / "shared" / "state-engine" / "state_utils.py"
+    spec = importlib.util.spec_from_file_location("mm_state_utils_mcp", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    table = getattr(module, "MCP_MANDATORY_NODES", None)
+    if not isinstance(table, dict):
+        error("state_defs.MCP_MANDATORY_NODES 缺失或不是 dict")
+        return
+    for node, entry in table.items():
+        if node not in module.NODES:
+            error(f"MCP 必调表含未知节点 {node}")
+            continue
+        if not isinstance(entry, dict):
+            error(f"MCP 必调表 {node} 必须是 dict（含 desc/all/any）")
+            continue
+        if not str(entry.get("desc") or "").strip():
+            error(f"MCP 必调表 {node} 缺 desc（报错信息无法说明该调什么）")
+        has_all, has_any = set(entry.get("all") or ()), set(entry.get("any") or ())
+        if not has_all and not has_any:
+            error(f"MCP 必调表 {node} 的 all/any 全为空——任何检索留痕都能满足门禁")
+    # 迭代节点的 MCP 门禁必须每轮生效，否则"纯内生输出"可跨轮复用旧留痕
+    for node in ("N4", "N5", "N7"):
+        if node not in table:
+            error(f"迭代节点 {node} 未列入 MCP 必调表（每轮必须重新检索）")
 
 
 def check_benchmark_contract() -> None:
@@ -658,6 +780,8 @@ def main() -> int:
     check_frontmatter_whitelist()
     check_version_alignment()
     check_component_counts()
+    check_documented_counts()
+    check_documented_commands_exist()
     check_no_big_archives_tracked()
     check_naming_redlines()
     check_plugin_manifest()
@@ -668,6 +792,7 @@ def main() -> int:
     check_professional_skill_contract()
     check_gates_registry()
     check_benchmark_contract()
+    check_mcp_requirement_contract()
     check_data_lineage_contract()
     check_no_deleted_skill_loads()
     check_user_level_sync()

@@ -123,7 +123,7 @@
       "timing": "N8 终审前",
       "kind": "review",
       "blocking": "hard_stop",
-      "criterion": "全维度反模式终扫 0 个 High 命中；纠正留痕闭环（CORRECTION_UNACKED 为 0）",
+      "criterion": "全维度反模式终扫 0 个 High 命中；纠正留痕闭环（CORRECTION_UNACKED 为 0 且无 CORRECTION_LEDGER_TAMPERED）",
       "producer": "reviewer",
       "artifact": "state/agents/reviewer/result.json"
     },

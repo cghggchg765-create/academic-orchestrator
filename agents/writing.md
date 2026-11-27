@@ -220,6 +220,8 @@ maxTurns: 50
 1. 产物落 `ReportPaper/LaTeX/`（main.tex/preamble.tex/sections/ref.bib；编译缓存进 build/；图片用相对路径引用 `../../ResultFigures/`）。
 2. 迭代轮次归属 orchestrator 开启的 `rounds[n]`（goal 写入 N7 首页）；每轮至少 3 次 git 提交（implement 论文 / run 编译日志 / score 状态），commit 带 `Round:/Agent:/Stage:/Goal:/Score:` trailer。
 3. 写 `state/agents/writing/result.json`（含本轮改动摘要、编译状态、数据一致性核对结果）。
+   - 若曾收到主 Agent 的 `[纠正]` 消息，**必须**补 `corrections_ack: [{correction_id, note, implemented_artifacts}]`
+     （协议见 `skills/academic-orchestration/SKILL.md` §D；未填 → A3 判 `CORRECTION_UNACKED`）。
 4. 刷新 N7 节点首页：`python state/state_utils.py node-finish N7 --agent writing --artifact ReportPaper/LaTeX/main.tex`。
 5. 输出 `[REVIEW-REQUEST] 节点=N7, 建议=reviewer（论文评审专用模式）`；收下 feedback 后由 orchestrator 开启下一轮（round-decide 决策为 continue 时）。
 

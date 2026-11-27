@@ -8,10 +8,10 @@
         "source": "directory",
         "path": "."
       },
-      "description": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。23 Skill / 21 Agent / 7 命令。",
+      "description": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。25 Skill / 21 Agent / 7 命令。",
       "description_i18n": {
-        "en": "Academic orchestration core (2.0.0): 9-stage state machine, gate system, iteration loop, background parallel dispatch, figure/table literature benchmarking. 23 skills / 21 agents / 7 commands.",
-        "zh-CN": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。23 Skill / 21 Agent / 7 命令。"
+        "en": "Academic orchestration core (2.0.0): 9-stage state machine, gate system, iteration loop, background parallel dispatch, figure/table literature benchmarking. 25 skills / 21 agents / 7 commands.",
+        "zh-CN": "学术科研编排核心（2.0.0）：9 阶段状态机 + 门禁体系 + 迭代环 + 后台并行派发 + 图表文献对标；学术界主体能力由 academic-research-skills 提供。25 Skill / 21 Agent / 7 命令。"
       },
       "version": "2.0.0",
       "author": {

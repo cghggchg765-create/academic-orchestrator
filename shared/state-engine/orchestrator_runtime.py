@@ -16,26 +16,47 @@ from typing import Any
 
 STATE_DIR = "state"
 PROBLEM_LOCK = "problem_lock.json"
-NODES = {
-    "N0": {"name": "需求确认", "executor": "orchestrator", "reviewer": None, "upstream": [], "skills": [],
-           "artifact": "README-项目总说明.md, ProblemInfo/TeamInfo.txt, TimePlan.md, state/"},
-    "N1": {"name": "选题拆解", "executor": "selector", "reviewer": "reviewer", "upstream": ["N0"],
-           "skills": ["mm-problem-analysis", "mm-self-review"], "artifact": "ProblemInfo/"},
-    "N2": {"name": "数据处理", "executor": "dataprep", "reviewer": "reviewer", "upstream": ["N1"],
-           "skills": ["mm-data-preprocessing"], "artifact": "Data/"},
-    "N3": {"name": "建模", "executor": "modeler", "reviewer": "reviewer", "upstream": ["N1", "N2"],
-           "skills": ["mm-model-library"], "artifact": "ModelDocs/"},
-    "N4": {"name": "代码", "executor": "coder", "reviewer": "mm-code-reviewer", "upstream": ["N3"],
-           "skills": ["mm-iteration-engine", "mm-algorithm-dev", "code-review"], "artifact": "Code/"},
-    "N5": {"name": "调优", "executor": "tuner", "reviewer": "mm-code-reviewer", "upstream": ["N4"],
-           "skills": ["mm-model-tuning", "mm-iteration-engine"], "artifact": "ModelDocs/"},
-    "N6": {"name": "图表", "executor": "visualization", "reviewer": "mm-viz-reviewer", "upstream": ["N4", "N5"],
-           "skills": ["mm-visualization", "mm-iteration-engine"], "artifact": "Code/output/figures, ResultFigures/"},
-    "N7": {"name": "论文", "executor": "writing", "reviewer": "reviewer", "upstream": ["N6"],
-           "skills": ["mm-iteration-engine", "mm-latex-writing", "mm-self-review"], "artifact": "ReportPaper/"},
-    "N8": {"name": "评审", "executor": "reviewer", "reviewer": "reviewer", "upstream": ["N7"],
-           "skills": ["mm-self-review"], "artifact": "SubmissionPackage/"},
-}
+
+# P0-10：不再维护第三份 NODES 副本。原副本已漂移（N0 executor=orchestrator、
+# N6/N7/N8 缺 figure-table-benchmark、N0 artifact 的 TimePlan.md 少了 ProblemInfo/ 前缀），
+# 导致 /mm-iterate 打印出的命令会被自己拒绝。现统一从 state_defs 派生。
+try:
+    from state_defs import NODES as _DEF_NODES, UPSTREAM as _DEF_UPSTREAM, skill_basename as _sb
+    NODES = {
+        nid: {
+            "name": info.get("name", nid),
+            "executor": info.get("executor"),
+            "reviewer": info.get("reviewer"),
+            "upstream": [up for up, _ in _DEF_UPSTREAM.get(nid, [])],
+            "skills": [_sb(s) for s in (info.get("skills") or [])],
+            "artifact": info.get("artifact", ""),
+        }
+        for nid, info in _DEF_NODES.items()
+    }
+except ImportError:  # 独立运行时降级：保持最小可用的静态表（应与 state_defs 一致）
+    NODES = {
+        "N0": {"name": "需求确认", "executor": "main-agent", "reviewer": None, "upstream": [], "skills": [],
+               "artifact": "README-项目总说明.md, ProblemInfo/TeamInfo.txt, ProblemInfo/TimePlan.md, state/"},
+        "N1": {"name": "选题拆解", "executor": "selector", "reviewer": "reviewer", "upstream": ["N0"],
+               "skills": ["mm-problem-analysis", "mm-self-review"], "artifact": "ProblemInfo/"},
+        "N2": {"name": "数据处理", "executor": "dataprep", "reviewer": "reviewer", "upstream": ["N1"],
+               "skills": ["mm-data-preprocessing"], "artifact": "Data/"},
+        "N3": {"name": "建模", "executor": "modeler", "reviewer": "reviewer", "upstream": ["N1", "N2"],
+               "skills": ["mm-model-library"], "artifact": "ModelDocs/"},
+        "N4": {"name": "代码", "executor": "coder", "reviewer": "mm-code-reviewer", "upstream": ["N3"],
+               "skills": ["mm-iteration-engine", "mm-algorithm-dev", "code-review"], "artifact": "Code/"},
+        "N5": {"name": "调优", "executor": "tuner", "reviewer": "mm-code-reviewer", "upstream": ["N4"],
+               "skills": ["mm-model-tuning", "mm-iteration-engine"], "artifact": "ModelDocs/"},
+        "N6": {"name": "图表", "executor": "visualization", "reviewer": "mm-viz-reviewer",
+               "upstream": ["N4", "N5"],
+               "skills": ["mm-visualization", "mm-iteration-engine", "figure-table-benchmark"],
+               "artifact": "Code/output/figures, ResultFigures/"},
+        "N7": {"name": "论文", "executor": "writing", "reviewer": "reviewer", "upstream": ["N6"],
+               "skills": ["mm-iteration-engine", "mm-latex-writing", "mm-self-review",
+                          "figure-table-benchmark"], "artifact": "ReportPaper/"},
+        "N8": {"name": "评审", "executor": "reviewer", "reviewer": "reviewer", "upstream": ["N7"],
+               "skills": ["mm-self-review", "figure-table-benchmark"], "artifact": "SubmissionPackage/"},
+    }
 
 @dataclass(frozen=True)
 class Task:
@@ -229,7 +250,7 @@ def detect_existing_materials(project: str | Path) -> dict[str, Any]:
     复用（代码→Code/legacy 审阅修复、数据→Data/raw、论文→ReportPaper/LaTeX/drafts 转换），
     而不是从零开始。
     """
-    root = Path(project)
+    root = Path(project).resolve()
     scan_dirs = [root, root / "Material", root / "BackupArchive", root / "Data" / "raw", root / "ProblemInfo"]
     found: dict[str, list[str]] = {"paper": [], "code": [], "data": []}
     seen: set[str] = set()
@@ -237,9 +258,18 @@ def detect_existing_materials(project: str | Path) -> dict[str, Any]:
         if not base.is_dir():
             continue
         for p in sorted(base.rglob("*")):
-            if not p.is_file() or any(part in IGNORED_PARTS for part in p.parts):
+            if not p.is_file():
                 continue
-            rel = p.relative_to(root).as_posix()
+            # 只按相对项目根的路径片段判断忽略项。原先直接看 p.parts（绝对路径的
+            # 每一段），项目只要放在 .../build/... 或 .../state/... 下，
+            # 整棵树都会被判成"已忽略"，已有材料检测恒为 False。
+            try:
+                rel_parts = p.resolve().relative_to(root).parts
+            except (ValueError, OSError):
+                continue
+            if any(part in IGNORED_PARTS for part in rel_parts):
+                continue
+            rel = Path(*rel_parts).as_posix()
             if rel in SCAFFOLD_FILES or rel in seen:
                 continue
             seen.add(rel)

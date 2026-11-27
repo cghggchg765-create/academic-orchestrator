@@ -1,0 +1,34 @@
+{
+  "request": "用户原话摘要",
+  "slug": "text1",
+  "context": {
+    "language": "zh",
+    "genre": "paper-abstract",
+    "platform": "",
+    "audience": "reviewers",
+    "publicness": "public",
+    "voice_sample": "",
+    "mode": "rewrite",
+    "strength": "medium",
+    "must_preserve": ["facts", "numbers", "citations", "limitations", "negations", "terms"]
+  },
+  "assignments": [
+    {
+      "stage": "V0",
+      "skill": "anti-defensive-writing",
+      "role": "narrative",
+      "status": "planned",
+      "inputs": [],
+      "outputs": [],
+      "qa": {
+        "owner": "",
+        "status": "pending",
+        "notes": ""
+      },
+      "next": ""
+    }
+  ],
+  "handoffs": [],
+  "open_questions": [],
+  "next": ""
+}

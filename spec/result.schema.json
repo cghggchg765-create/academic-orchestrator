@@ -17,6 +17,20 @@
     "timestamps": {"type": "object", "required": ["started_at", "finished_at"], "properties": {"started_at": {"type": "string"}, "finished_at": {"type": ["string", "null"]}}, "additionalProperties": true},
     "payload": {"type": "object"},
     "skills_read": {"type": "array", "items": {"type": "string"}},
+    "corrections_ack": {
+      "description": "收到主 Agent 纠正后，由本人逐条回执。缺项 == 未回执（A3 会判 CORRECTION_UNACKED）。只能签发给自己的 correction_id。",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["correction_id"],
+        "properties": {
+          "correction_id": {"type": "string", "pattern": "^corr_[a-f0-9]{8,}$"},
+          "note": {"type": ["string", "null"]},
+          "implemented_artifacts": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": true
+      }
+    },
     "evidence": {"type": "array", "items": {"type": "string"}},
     "scope_id": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"},
     "scope_key": {"type": ["string", "null"]},

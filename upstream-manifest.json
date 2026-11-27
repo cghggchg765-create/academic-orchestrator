@@ -1,6 +1,6 @@
 {
-  "schema_version": "upstream-manifest/1.0",
-  "_comment": "本插件依赖的外部学术能力提供方的上游清单。用于 /academic-update 检查新版本与同步内容。所有路径为本机实际位置；repo 为上游地址；tracked=false 表示仅检测不自动应用（需人工确认）。",
+  "schema_version": "upstream-manifest/1.1",
+  "_comment": "本插件依赖的外部学术能力提供方的上游清单。用于 /academic-update 检查新版本与同步内容。所有路径为本机实际位置；repo 为上游地址；tracked=false 表示仅检测不自动应用（需人工确认）。git_pull 条目的版本事实以 installed_commit（本地 git HEAD sha）为准；installed_version 只允许填写可被 installed_plugins.json 校验的精确版本号，其余说明性文字一律放 installed_version_note，避免被当成可校验事实。",
   "generated_at": "2026-11-26",
   "upstreams": [
     {
@@ -29,7 +29,9 @@
       "local_paths": ["C:\\Users\\11352\\.zcode\\skills\\aris"],
       "repo": "https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep",
       "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\Auto-claude-code-research-in-sleep",
-      "installed_version": "main@2026-11-19",
+      "installed_commit": null,
+      "installed_commit_note": "待首次检查后回填（本机网络不可达，不写死 sha）",
+      "installed_version_note": "曾登记为“main@2026-11-19”，属不可校验的自由文本，已废弃；版本事实改以 installed_commit 为准。",
       "update_method": "git_pull",
       "tracked": true,
       "notes": "单目录 87 子技能，按需读 skills/<name>/SKILL.md，禁止整体加载。"
@@ -41,7 +43,9 @@
       "local_paths": ["C:\\Users\\11352\\.zcode\\skills\\nature-shared"],
       "repo": "",
       "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\nature-skills",
-      "installed_version": "manifest.yaml per skill",
+      "installed_commit": null,
+      "installed_commit_note": "待首次检查后回填（本机网络不可达，不写死 sha）",
+      "installed_version_note": "各子技能版本分散在各自的 manifest.yaml（version/always_load/routes），无法用单一字符串校验；版本事实改以 installed_commit 为准。",
       "update_method": "git_pull",
       "tracked": true,
       "notes": "23 个 nature-* 均有 manifest.yaml（version/always_load/routes）；依赖 nature-shared 共享层，不可单独更新子技能。"
@@ -53,7 +57,9 @@
       "local_paths": ["C:\\Users\\11352\\.zcode\\skills\\figure-pipeline"],
       "repo": "",
       "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\figure-pipeline",
-      "installed_version": "registry.json v1.2 (2026-11-16)",
+      "installed_commit": null,
+      "installed_commit_note": "待首次检查后回填（本机网络不可达，不写死 sha）",
+      "installed_version_note": "registry.json 内含版本信息但非 git 提交标识，无法用于提交级比对；版本事实改以 installed_commit 为准。",
       "update_method": "git_pull",
       "tracked": true,
       "notes": "调度器，不画图；子技能 S0-S4 分属不同来源，需逐个确认可用。"
@@ -65,7 +71,9 @@
       "local_paths": ["C:\\Users\\11352\\.zcode\\skills\\nsfc-policy"],
       "repo": "",
       "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\nsfc-agent-skills",
-      "installed_version": "unversioned",
+      "installed_commit": null,
+      "installed_commit_note": "待首次检查后回填（本机网络不可达，不写死 sha）",
+      "installed_version_note": "此前登记为“unversioned”，无可校验版本；版本事实改以 installed_commit 为准。",
       "update_method": "git_pull",
       "tracked": true
     },
@@ -101,7 +109,7 @@
         "C:\\Users\\11352\\.zcode\\cli\\plugins\\cache\\claude-plugins-official\\frontend-design\\0.0.0"
       ],
       "repo": "https://github.com/anthropics/skills",
-      "installed_version": "per-plugin",
+      "installed_version_note": "聚合条目，实际对应 spreadsheets / pdf / frontend-design 三个独立插件，各自版本由 Plugin Management 管理，无单一可校验版本号。",
       "update_method": "plugin_marketplace",
       "tracked": true,
       "notes": "2.0.0 已从本插件删除 xlsx / frontend-design / theme-factory 副本，改为运行时路由。"
@@ -113,7 +121,9 @@
       "local_paths": ["C:\\Users\\11352\\.zcode\\skills\\drawio-skill"],
       "repo": "",
       "git_source": "C:\\Users\\11352\\.zcode\\skill-sources\\drawio-skill",
-      "installed_version": "3.5.0",
+      "installed_commit": null,
+      "installed_commit_note": "待首次检查后回填（本机网络不可达，不写死 sha）",
+      "installed_version_note": "本机 skill-sources 副本为 3.5.0，但该版本号不来自 git 提交标识，无法用于提交级比对；版本事实改以 installed_commit 为准。",
       "update_method": "git_pull",
       "tracked": true,
       "notes": "本插件 v1.x 曾打包 1.14.0 旧版副本，2.0.0 已删除；改用本机 skill-sources 的 3.5.0。"

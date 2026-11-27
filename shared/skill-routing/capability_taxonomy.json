@@ -6,141 +6,521 @@
     {
       "id": "paper.writing",
       "label": "论文撰写与改写",
-      "keywords": ["论文写作", "论文撰写", "章节撰写", "初稿", "学术写作", "改写", "paper writing", "manuscript writing", "academic writing", "section writing", "drafting sections", "write paper"],
-      "output_kinds": ["prose", "latex"]
+      "keywords": [
+        "论文写作",
+        "论文撰写",
+        "章节撰写",
+        "初稿",
+        "学术写作",
+        "改写",
+        "paper writing",
+        "manuscript writing",
+        "academic writing",
+        "section writing",
+        "drafting sections",
+        "write paper"
+      ],
+      "output_kinds": [
+        "prose",
+        "latex"
+      ]
     },
     {
       "id": "paper.style",
       "label": "写作风格与期刊口径",
-      "keywords": ["写作风格", "期刊", "顶刊", "摘要", "引言", "文风", "journal style", "top journal", "abstract", "introduction", "rhetoric", "style calibration"],
-      "output_kinds": ["prose"]
+      "keywords": [
+        "写作风格",
+        "期刊",
+        "顶刊",
+        "摘要",
+        "引言",
+        "文风",
+        "journal style",
+        "top journal",
+        "abstract",
+        "introduction",
+        "rhetoric",
+        "style calibration"
+      ],
+      "output_kinds": [
+        "prose"
+      ]
     },
     {
       "id": "paper.review",
       "label": "同行评审与审稿",
-      "keywords": ["评审", "审稿", "同行评审", "模拟审稿", "审阅", "peer review", "referee", "reviewer", "manuscript review", "critique"],
-      "output_kinds": ["review_report"]
+      "keywords": [
+        "评审",
+        "审稿",
+        "同行评审",
+        "模拟审稿",
+        "审阅",
+        "peer review",
+        "referee",
+        "reviewer",
+        "manuscript review",
+        "critique"
+      ],
+      "output_kinds": [
+        "review_report"
+      ]
     },
     {
       "id": "paper.revision",
       "label": "审稿意见回应与修订",
-      "keywords": ["回应审稿", "审稿意见", "修改路线", "修订", "rebuttal", "response to reviewers", "revision", "revision coach"],
-      "output_kinds": ["prose", "response_letter"]
+      "keywords": [
+        "回应审稿",
+        "审稿意见",
+        "修改路线",
+        "修订",
+        "rebuttal",
+        "response to reviewers",
+        "revision",
+        "revision coach"
+      ],
+      "output_kinds": [
+        "prose",
+        "response_letter"
+      ]
     },
     {
       "id": "literature.search",
       "label": "文献检索与综述",
-      "keywords": ["文献", "检索", "综述", "系统评价", "元分析", "证据综合", "literature", "systematic review", "meta-analysis", "PRISMA", "literature review", "citation search"],
-      "output_kinds": ["review_matrix", "references"]
+      "keywords": [
+        "文献",
+        "检索",
+        "综述",
+        "系统评价",
+        "元分析",
+        "证据综合",
+        "literature",
+        "systematic review",
+        "meta-analysis",
+        "PRISMA",
+        "literature review",
+        "citation search"
+      ],
+      "output_kinds": [
+        "review_matrix",
+        "references"
+      ]
     },
     {
       "id": "research.design",
       "label": "研究设计与方法论证",
-      "keywords": ["研究设计", "方法论证", "研究问题", "假设", "方法论", "research design", "methodology", "research question", "hypothesis", "identification strategy"],
-      "output_kinds": ["prose"]
+      "keywords": [
+        "研究设计",
+        "方法论证",
+        "研究问题",
+        "假设",
+        "方法论",
+        "research design",
+        "methodology",
+        "research question",
+        "hypothesis",
+        "identification strategy"
+      ],
+      "output_kinds": [
+        "prose"
+      ]
     },
     {
       "id": "citation.audit",
       "label": "引用核查与著录规范",
-      "keywords": ["引用核查", "文献核对", "著录", "参考文献格式", "GB/T 7714", "citation check", "reference check", "bibliography", "cite", "bib"],
-      "output_kinds": ["audit_report"]
+      "keywords": [
+        "引用核查",
+        "文献核对",
+        "著录",
+        "参考文献格式",
+        "GB/T 7714",
+        "citation check",
+        "reference check",
+        "bibliography",
+        "cite",
+        "bib"
+      ],
+      "output_kinds": [
+        "audit_report"
+      ]
     },
     {
       "id": "integrity.audit",
       "label": "证据边界与主张核查",
-      "keywords": ["证据边界", "主张核查", "claim check", "claim ledger", "证据台账", "事实核查", "fact-check", "fact check", "过度声明", "overclaim", "reproducibility", "可复现性", "integrity check", "引用合规"],
-      "output_kinds": ["audit_report"]
+      "keywords": [
+        "证据边界",
+        "主张核查",
+        "claim check",
+        "claim ledger",
+        "证据台账",
+        "事实核查",
+        "fact-check",
+        "fact check",
+        "过度声明",
+        "overclaim",
+        "reproducibility",
+        "可复现性",
+        "integrity check",
+        "引用合规"
+      ],
+      "output_kinds": [
+        "audit_report"
+      ]
     },
     {
       "id": "deai",
       "label": "去 AI 化与文风自然化",
-      "keywords": ["去AI", "去 AI", "AI痕迹", "AI味", "模板句", "套话", "humanize", "de-AI", "AI detection", "AI-ness", "naturalize"],
-      "output_kinds": ["prose", "audit_report"]
+      "keywords": [
+        "去AI",
+        "去 AI",
+        "AI痕迹",
+        "AI味",
+        "模板句",
+        "套话",
+        "humanize",
+        "de-AI",
+        "AI detection",
+        "AI-ness",
+        "naturalize"
+      ],
+      "output_kinds": [
+        "prose",
+        "audit_report"
+      ]
     },
     {
       "id": "figure.data",
       "label": "数据图与统计图表",
-      "keywords": ["数据图", "统计图", "绘图", "matplotlib", "seaborn", "plot", "chart", "figure", "多面板", "面板图", "subplot"],
-      "output_kinds": ["figure"]
+      "keywords": [
+        "数据图",
+        "统计图",
+        "绘图",
+        "matplotlib",
+        "seaborn",
+        "plot",
+        "chart",
+        "figure",
+        "多面板",
+        "面板图",
+        "subplot"
+      ],
+      "output_kinds": [
+        "figure"
+      ]
     },
     {
       "id": "figure.diagram",
       "label": "结构图与示意图",
-      "keywords": ["流程图", "架构图", "示意图", "技术路线图", "drawio", "tikz", "uml", "flowchart", "diagram", "schematic", "visio"],
-      "output_kinds": ["figure"]
+      "keywords": [
+        "流程图",
+        "架构图",
+        "示意图",
+        "技术路线图",
+        "drawio",
+        "tikz",
+        "uml",
+        "flowchart",
+        "diagram",
+        "schematic",
+        "visio"
+      ],
+      "output_kinds": [
+        "figure"
+      ]
     },
     {
       "id": "figure.audit",
       "label": "图表规范审计与导出",
-      "keywords": ["图表规范", "分辨率", "dpi", "矢量", "组图一致", "图表审计", "figure audit", "vector export", "publication-ready", "svg"],
-      "output_kinds": ["audit_report", "figure"]
+      "keywords": [
+        "图表规范",
+        "分辨率",
+        "dpi",
+        "矢量",
+        "组图一致",
+        "图表审计",
+        "figure audit",
+        "vector export",
+        "publication-ready",
+        "svg"
+      ],
+      "output_kinds": [
+        "audit_report",
+        "figure"
+      ]
     },
     {
       "id": "figure.benchmark",
       "label": "图表/表格的文献对标与完备性核查",
-      "keywords": ["图表对标", "表格设计", "列名设计", "图表完备", "表格字段", "对比文献图表", "同行图表", "table design", "column schema", "figure benchmark", "table completeness", "chart comparison", "what figures do papers use", "表头设计"],
-      "output_kinds": ["benchmark_matrix", "audit_report"]
+      "keywords": [
+        "图表对标",
+        "表格设计",
+        "列名设计",
+        "图表完备",
+        "表格字段",
+        "对比文献图表",
+        "同行图表",
+        "table design",
+        "column schema",
+        "figure benchmark",
+        "table completeness",
+        "chart comparison",
+        "what figures do papers use",
+        "表头设计"
+      ],
+      "output_kinds": [
+        "benchmark_matrix",
+        "audit_report"
+      ]
     },
     {
       "id": "table.build",
       "label": "学术表格构建与规范化",
-      "keywords": ["三线表", "表格制作", "表注", "表格模板", "booktabs", "tabular", "table formatting", "table caption", "数据表"],
-      "output_kinds": ["table"]
+      "keywords": [
+        "三线表",
+        "表格制作",
+        "表注",
+        "表格模板",
+        "booktabs",
+        "tabular",
+        "table formatting",
+        "table caption",
+        "数据表"
+      ],
+      "output_kinds": [
+        "table"
+      ]
+    },
+    {
+      "id": "figure.pipeline",
+      "label": "整套绘图协同（跨阶段多图/风格统一/图形摘要）",
+      "keywords": [
+        "整套图",
+        "一组图",
+        "多图风格统一",
+        "图形摘要",
+        "graphical abstract",
+        "方法框架图",
+        "技术路线图",
+        "drawio",
+        "visio",
+        "图片转可编辑",
+        "绘图协同",
+        "figure pipeline",
+        "多个图一起",
+        "图表体系"
+      ],
+      "output_kinds": [
+        "figure",
+        "report"
+      ]
+    },
+    {
+      "id": "voice.pipeline",
+      "label": "写作口吻治理（防御性写作/去AI味协同）",
+      "keywords": [
+        "防御性写作",
+        "AI味",
+        "AI 味",
+        "去AI化",
+        "去 AI 化",
+        "降低AI率",
+        "太像AI写的",
+        "机械感",
+        "模板化表达",
+        "心虚",
+        "自我削弱",
+        "voice pipeline",
+        "文风治理",
+        "口吻",
+        "de-AI",
+        "naturalize"
+      ],
+      "output_kinds": [
+        "prose",
+        "audit_report"
+      ]
     },
     {
       "id": "latex.build",
       "label": "LaTeX 质检与编译产出",
-      "keywords": ["latex", "tex", "编译", "排版", "pdf 产出", "ctex", "typeset", "compile", "xelatex"],
-      "output_kinds": ["pdf", "latex"]
+      "keywords": [
+        "latex",
+        "tex",
+        "编译",
+        "排版",
+        "pdf 产出",
+        "ctex",
+        "typeset",
+        "compile",
+        "xelatex"
+      ],
+      "output_kinds": [
+        "pdf",
+        "latex"
+      ]
     },
     {
       "id": "stats.analysis",
       "label": "统计分析与结果解读",
-      "keywords": ["统计分析", "回归", "显著性", "检验", "统计解释", "statistics", "regression", "significance", "hypothesis test", "metrics"],
-      "output_kinds": ["table", "prose"]
+      "keywords": [
+        "统计分析",
+        "回归",
+        "显著性",
+        "检验",
+        "统计解释",
+        "statistics",
+        "regression",
+        "significance",
+        "hypothesis test",
+        "metrics"
+      ],
+      "output_kinds": [
+        "table",
+        "prose"
+      ]
     },
     {
       "id": "data.prep",
       "label": "数据清洗与特征工程",
-      "keywords": ["数据清洗", "预处理", "缺失值", "异常值", "特征工程", "data cleaning", "preprocessing", "missing value", "outlier", "feature engineering"],
-      "output_kinds": ["dataset", "table"]
+      "keywords": [
+        "数据清洗",
+        "预处理",
+        "缺失值",
+        "异常值",
+        "特征工程",
+        "data cleaning",
+        "preprocessing",
+        "missing value",
+        "outlier",
+        "feature engineering"
+      ],
+      "output_kinds": [
+        "dataset",
+        "table"
+      ]
     },
     {
       "id": "deliver.pdf",
       "label": "PDF 文档处理与交付",
-      "keywords": ["pdf", "合并", "拆分", "水印", "表单", "ocr", "merge", "split", "form filling"],
-      "output_kinds": ["pdf"]
+      "keywords": [
+        "pdf",
+        "合并",
+        "拆分",
+        "水印",
+        "表单",
+        "ocr",
+        "merge",
+        "split",
+        "form filling"
+      ],
+      "output_kinds": [
+        "pdf"
+      ]
     },
     {
       "id": "deliver.docx",
       "label": "Word 文档交付",
-      "keywords": ["word", "docx", "文档", "目录", "页眉页脚", "letterhead", "tracked changes"],
-      "output_kinds": ["docx"]
+      "keywords": [
+        "word",
+        "docx",
+        "文档",
+        "目录",
+        "页眉页脚",
+        "letterhead",
+        "tracked changes"
+      ],
+      "output_kinds": [
+        "docx"
+      ]
     },
     {
       "id": "deliver.xlsx",
       "label": "电子表格交付",
-      "keywords": ["excel", "xlsx", "表格", "工作簿", "spreadsheet", "workbook", "pivot"],
-      "output_kinds": ["xlsx"]
+      "keywords": [
+        "excel",
+        "xlsx",
+        "表格",
+        "工作簿",
+        "spreadsheet",
+        "workbook",
+        "pivot"
+      ],
+      "output_kinds": [
+        "xlsx"
+      ]
     },
     {
       "id": "deliver.pptx",
       "label": "演示文稿交付",
-      "keywords": ["ppt", "pptx", "幻灯片", "汇报", "presentation", "slide", "deck"],
-      "output_kinds": ["pptx"]
+      "keywords": [
+        "ppt",
+        "pptx",
+        "幻灯片",
+        "汇报",
+        "presentation",
+        "slide",
+        "deck"
+      ],
+      "output_kinds": [
+        "pptx"
+      ]
     }
   ],
   "stage_capabilities": {
     "_comment": "阶段→能力需求（协调层知识：哪个阶段需要哪类能力）。仍然不含具体 skill 名称。",
-    "N1": ["literature.search", "research.design"],
-    "N2": ["data.prep", "stats.analysis"],
-    "N3": ["research.design", "stats.analysis"],
+    "N1": [
+      "literature.search",
+      "research.design"
+    ],
+    "N2": [
+      "data.prep",
+      "stats.analysis"
+    ],
+    "N3": [
+      "research.design",
+      "stats.analysis"
+    ],
     "N4": [],
-    "N5": ["stats.analysis"],
-    "N6": ["figure.data", "figure.diagram", "figure.audit", "figure.benchmark", "table.build"],
-    "N7": ["paper.writing", "paper.style", "latex.build", "citation.audit", "figure.benchmark", "table.build"],
-    "N8": ["paper.review", "integrity.audit", "deai", "citation.audit", "figure.benchmark"],
-    "GENERAL": ["paper.writing", "paper.review", "literature.search", "figure.data", "figure.diagram", "latex.build", "deai", "stats.analysis", "figure.benchmark"]
+    "N5": [
+      "stats.analysis"
+    ],
+    "N6": [
+      "figure.data",
+      "figure.diagram",
+      "figure.audit",
+      "figure.benchmark",
+      "table.build",
+      "figure.pipeline"
+    ],
+    "N7": [
+      "paper.writing",
+      "paper.style",
+      "latex.build",
+      "citation.audit",
+      "figure.benchmark",
+      "table.build",
+      "voice.pipeline"
+    ],
+    "N8": [
+      "paper.review",
+      "integrity.audit",
+      "deai",
+      "citation.audit",
+      "figure.benchmark",
+      "voice.pipeline"
+    ],
+    "GENERAL": [
+      "paper.writing",
+      "paper.review",
+      "literature.search",
+      "figure.data",
+      "figure.diagram",
+      "latex.build",
+      "deai",
+      "stats.analysis",
+      "figure.benchmark",
+      "figure.pipeline",
+      "voice.pipeline"
+    ]
   },
   "selection_policy": {
     "_comment": "匹配与排序策略（可调，属于协调层）。primary 会被硬门禁强制加载；supporting 仅作建议。routing_skills 是纯编排入口（加载后自身即为流程），不作为专业执行者被选中。一个能力只取最强的一个 primary（per_capability_primary），避免同质技能并列；阶段总量再受 max_stage_primary 约束。",
@@ -154,6 +534,9 @@
     "stage_weight": 1.5,
     "require_name_or_description_hit": true,
     "exclude_disabled_skills": true,
-    "routing_skills": ["mathematical-modeling", "mm-iteration-engine"]
+    "routing_skills": [
+      "mathematical-modeling",
+      "mm-iteration-engine"
+    ]
   }
 }

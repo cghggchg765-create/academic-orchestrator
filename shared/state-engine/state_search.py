@@ -2,9 +2,34 @@
 from state_defs import *  # noqa: F401,F403
 from case_search_lib import filter_cases, load_cases, locate_skill_root, score_cases
 
+def _safe_case_id(case_id):
+    """案例 ID 会拼进 state/cases/<id>.json 路径——必须防穿越。
+
+    案例库 index.json 是外部数据（可手工编辑、可来自第三方技能包），
+    原实现直接 f"{case_id}.json": `../../../ESCAPED` 能把文件写到项目外，
+    绝对路径更会把 os.path.join 的 root 前缀整个吃掉。
+    这里只允许字母数字开头、含 . _ - 的安全单段标识符。
+    """
+    from state_guard import safe_component
+    value = str(case_id or "").strip()
+    if not value:
+        raise ValueError("案例 ID 为空")
+    return safe_component(value, "case_id")
+
+
+def _load_case_index(root):
+    """读取 state/cases/index.json（结构不合法时报错，不静默当空索引）。"""
+    index = load_json(os.path.join(root, CASES_INDEX), {"version": "1.0", "cases": []})
+    if not isinstance(index, dict) or not isinstance(index.get("cases", []), list):
+        sys.exit(f"[state_utils] 案例索引结构非法: {CASES_INDEX}（期望 "
+                 f'{{"version": ..., "cases": [...]}}）；请修复该文件后重试')
+    index.setdefault("cases", [])
+    return index
+
+
 def cmd_case_add(args):
     root = os.path.abspath(args.dir)
-    index = load_json(os.path.join(root, CASES_INDEX), {"version": "1.0", "cases": []})
+    index = _load_case_index(root)
     case_id = "case_" + uuid.uuid4().hex[:8]
     case = {"id": case_id, "title": args.title, "source": args.source, "url": args.url or "",
             "source_type": args.source_type or "", "search_query": args.query or "",
@@ -43,18 +68,24 @@ def cmd_case_search(args):
         if not ranked:
             print("[state_utils] case-search: 未命中与查询结构相似的案例（可放宽 --type/--model 过滤后重试）。")
         for index, (score, case, matched) in enumerate(ranked, start=1):
-            print(f"{index}. [{case['case_id']}] {case['year']} "
-                  f"{case.get('paper_code') or '-'} {case['title']}")
+            print(f"{index}. [{case.get('case_id', '-')}] {case.get('year', '-')} "
+                  f"{case.get('paper_code') or '-'} {case.get('title', '-')}")
             print(f"   score={score:.2f}; types={', '.join(case.get('problem_types') or [])}; "
                   f"models={', '.join((case.get('models') or [])[:8])}")
-            print(f"   matched={', '.join(matched[:12])}; card={case['card_path']}")
+            print(f"   matched={', '.join(matched[:12])}; card={case.get('card_path') or '-'}")
     # --save：把 top-N 命中沉淀进项目 state/cases/（供派发携带，禁止替换案例检索过程本身）
     if args.save:
         root = os.path.abspath(args.dir)
-        index = load_json(os.path.join(root, CASES_INDEX), {"version": "1.0", "cases": []})
-        saved = 0
+        index = _load_case_index(root)
+        saved, rejected = 0, []
         for score, case, matched in ranked:
-            case_id = "pro_" + case["case_id"].replace("-", "")
+            # 案例库 index.json 是外部数据：ID 必须先校验，否则 `../../x` / 绝对路径
+            # 会让 os.path.join(root, ...) 写到项目外（Windows 上还会吃掉 root 前缀）。
+            try:
+                case_id = "pro_" + _safe_case_id(case["case_id"].replace("-", ""))
+            except (KeyError, SystemExit, ValueError) as exc:
+                rejected.append(f"{case.get('case_id')!r}: {exc}")
+                continue
             if any(existing.get("id") == case_id for existing in index["cases"]):
                 continue
             record = {"id": case_id, "title": case["title"], "source": case.get("card_path") or "",
@@ -68,6 +99,9 @@ def cmd_case_search(args):
             saved += 1
         save_json_atomic(os.path.join(root, CASES_INDEX), index)
         print(f"[state_utils] case-search --save: 沉淀 {saved} 张命中案例到 state/cases/（证据链，共 {len(index['cases'])} 条）")
+        if rejected:
+            print("[state_utils] ⚠ 以下案例 ID 非法（含路径分隔/穿越或保留字符），已跳过未落盘："
+                  + "；".join(rejected[:5]), file=sys.stderr)
 
 
 def cmd_search_source_add(args):
@@ -111,6 +145,20 @@ def cmd_search_evidence(args):
           f" 执行 {NODES[node]['executor']} / 审阅 {NODES[node]['reviewer'] or '-'}（禁止纯内生）")
 
 
+def _claim_ttl_seconds(raw, default=3600):
+    """claim.json 的 ttl_s 可能是字符串/负数/None（手工编辑、旧版本残留）。
+
+    原实现直接拿原始值参与 `< ttl` 比较，ttl_s 为字符串时抛
+    TypeError: '<' not supported between 'float' and 'str'，整个跨 agent 互斥
+    扫描直接崩掉 → 认领互斥失效（或命令异常退出）。这里统一转成合法数值。
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
 def _active_claims_for_node(root, node, exclude_agent=None):
     """扫描 state/agents/*/claim.json，返回该节点上未过期且属于其他 agent 的租约。
 
@@ -131,17 +179,31 @@ def _active_claims_for_node(root, node, exclude_agent=None):
             c = json.loads(open(path, encoding="utf-8").read())
         except (OSError, json.JSONDecodeError):
             continue
-        if c.get("node") != node:
+        if not isinstance(c, dict) or c.get("node") != node:
             continue
         try:
             claimed = datetime.fromisoformat(str(c["claimed_at"]).replace("Z", "+00:00"))
         except (ValueError, KeyError):
             continue
-        ttl = c.get("ttl_s", 3600)
+        if claimed.tzinfo is None:
+            claimed = claimed.replace(tzinfo=timezone.utc)
+        ttl = _claim_ttl_seconds(c.get("ttl_s", 3600))
         if (datetime.now(timezone.utc) - claimed).total_seconds() < ttl:
             active.append({"agent": c.get("agent_id", name), "claimed_at": c.get("claimed_at"),
                            "ttl_s": ttl, "round": c.get("round")})
     return active
+
+
+def _reject_windows_name_collision(value, label):
+    """拒绝 Windows 上会折叠到同一个路径的标识符（委托 state_events 的同一实现）。
+
+    `abc` 与 `abc.` / `abc ` 在 Windows 上落到同一个目录（尾点尾空格被静默剥离），
+    实测两个不同 agent_id 会共用同一份 claim.json，互相顶替租约；
+    CON/PRN/NUL/AUX/COM1… 这类设备名会让后续 open 出现怪异行为。
+    safe_component 的正则允许尾点和这些名字，因此在这层补上。
+    """
+    from state_events import _require_agent_id
+    return _require_agent_id(value, label)
 
 
 def cmd_claim(args):
@@ -149,16 +211,28 @@ def cmd_claim(args):
     require_node(args.node)
     state = load_state(root)
     node = args.node
-    ttl = int(getattr(args, "ttl", 3600) or 3600)
+    try:
+        ttl = int(getattr(args, "ttl", 3600) or 3600)
+    except (TypeError, ValueError):
+        sys.exit(f"[state_utils] 非法 --ttl: {getattr(args, 'ttl', None)!r}（须为正整数秒）")
+    if ttl <= 0:
+        sys.exit(f"[state_utils] 非法 --ttl: {ttl}（须为正整数秒）")
+    # P0-8：agent_id 会拼进目录路径，必须校验，否则 `claim "../../../EVIL"` 可写出项目外
+    from state_guard import safe_component, assert_within
+    safe_component(args.agent_id, "agent_id")
+    _reject_windows_name_collision(args.agent_id, "agent_id")
     claim_dir = os.path.join(root, STATE_DIR, "agents", args.agent_id)
+    assert_within(root, claim_dir, "claim 目录")
     claim_path = os.path.join(claim_dir, "claim.json")
 
     # ① 同一 agent 重复认领同一节点：未过期则拒绝
     old = load_json(claim_path)
-    if old and old.get("node") == node:
+    if isinstance(old, dict) and old.get("node") == node:
         try:
             claimed = datetime.fromisoformat(str(old["claimed_at"]).replace("Z", "+00:00"))
-            old_ttl = old.get("ttl_s", 3600)
+            if claimed.tzinfo is None:
+                claimed = claimed.replace(tzinfo=timezone.utc)
+            old_ttl = _claim_ttl_seconds(old.get("ttl_s", 3600))
             if (datetime.now(timezone.utc) - claimed).total_seconds() < old_ttl:
                 sys.exit(f"[state_utils] 节点 {node} 你已有有效租约（{old.get('claimed_at')} 认领，"
                          f"ttl={old_ttl}s），拒绝重复认领。如需续期请先等过期或换节点。")

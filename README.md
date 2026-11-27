@@ -179,7 +179,7 @@ docs/            文档导航（docs/README.md）→ 迭代工作流说明 + 冒
 > 📌 **历史文档**：v1.5.0/v1.7.0 的优化整改记录已归档到
 > `docs/archive/v1.x-optimization/`（含当时的 24/34/22 口径与取舍理由），
 > **不作为现行规范**。现行组件口径以 `scripts/lint_contracts.py` 的
-> `EXPECTED_COUNTS` 为准（当前 **21 Agent / 23 Skill / 7 命令**）。
+> `EXPECTED_COUNTS` 为准（当前 **21 Agent / 25 Skill / 7 命令**）。
 
 ## 标准项目结构（MathModel_Contest 适配版）
 
@@ -266,3 +266,66 @@ python -m unittest discover -s tests -p 'test_*.py'                     # 状态
 - 数学建模专用 agent/skill：本项目开发（含迭代引擎与 2 个专用审阅 Agent）
 - `ref/`：GitHub 开源参考项目（Linference/math_model 数学建模多智能体系统，状态 schema 与评分体系蓝本）
 - `templates/`：国赛论文模板
+
+## 外部依赖与上游仓库（换机器首次安装必读）
+
+本插件把**学科能力**委托给外部 skill 库与自己维护的 pipeline 流程，插件本体只做编排与门禁。
+机器换台后这些外部依赖**不会自动出现**，必须先装齐再启用插件，否则节点会因技能缺失而卡住。
+
+机器可读的唯一事实源是 [`upstream-sources.json`](upstream-sources.json)（`sources[]` 含 tier/kind/repo/install/local_path），
+下表是它的可读视图；两者不一致时以 JSON 为准。
+
+### 必需（缺任一 → 核心节点无法执行）
+
+| 依赖 | 类型 | 上游仓库 |
+|---|---|---|
+| academic-research-skills | 插件（论文/深度研究/同行评审/全链路/系统综述） | https://github.com/Imbad0202/academic-research-skills |
+| ARIS | 技能库（科研全流程 87 子技能） | https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep |
+| nature 家族 | 技能库（写作/检索/精读/交付矩阵） | https://github.com/Yuan1z0825/nature-skills |
+| figure-pipeline | 流程（随本仓库分发，`skills/figure-pipeline/`） | 无独立仓库，本仓库内置 |
+
+### 推荐（图表/绘制能力增强）
+
+| 依赖 | 类型 | 上游仓库 |
+|---|---|---|
+| scipilot-figure-skill | 技能 | https://github.com/Haojae/scipilot-figure-skill |
+| figures4papers | 技能 | https://github.com/ChenLiu-1996/figures4papers |
+
+### 可选
+
+| 依赖 | 类型 | 上游仓库 |
+|---|---|---|
+| voice-pipeline | 流程（随本仓库分发，`skills/voice-pipeline/`；含可选豆包语音服务） | 无独立仓库，本仓库内置 |
+| drawio-skill | 技能 | https://github.com/Agents365-ai/drawio-skill |
+| codex-visio-paper-figure-skill | 技能 | https://github.com/pengjunchi0/codex-visio-paper-figure-skill |
+| paper-framework-figure-studio-pro | 技能 | https://github.com/c-narcissus/paper-framework-figure-studio-pro |
+| nsfc-agent-skills | 技能库 | https://github.com/njzjz/nsfc-agent-skills |
+| AI-Research-SKILLs | 技能库 | https://github.com/Orchestra-Research/AI-Research-SKILLs |
+| scientific-agent-skills | 技能库 | https://github.com/K-Dense-AI/scientific-agent-skills |
+| Research-Paper-Writing-Skills | 技能库 | https://github.com/Master-cai/Research-Paper-Writing-Skills |
+| ppt-master | 技能 | https://github.com/hugohe3/ppt-master |
+| Humanizer-zh / anti-defensive-writing / agent-reach | 技能（LOCAL_ONLY，无公开仓库，需本地已有） | — |
+
+> 表中 URL 均由 `git remote get-url origin` 在本机实测确认（见 JSON 的 `verified_by` 字段）。
+> 本地已有路径记录在 JSON 的 `local_path`，只作参考，**不要**写进任何脚本或配置。
+
+### 首次安装顺序
+
+1. 装宿主（ZCode / Claude Code / Codex CLI）。
+2. 装必需插件 `academic-research-skills`（走各自插件市场）。
+3. clone 技能库到 skills 根：ARIS、nature 家族；本仓库自带的 figure-pipeline / voice-pipeline 随插件一起就位。
+4. 按需装可选能力（drawio / figures4papers / visio / nsfc / ppt-master…）。
+5. 配 MCP（paper-mcp、github、context7 等，见 `mcp/`，详见下文「MCP 集成」）。
+6. **跑自检**：
+
+```bash
+python scripts/preflight.py            # 只报问题，退出码仅在被 BLOCKED 时为 1
+python scripts/preflight.py --json     # 机器可读报告
+```
+
+`preflight.py` 逐项检查：目录存在性、`SKILL.md` frontmatter 是否合法（name/description 必填、
+description ≤1024、未知键会让技能永不自动加载）、插件缓存是否落地、MCP 是否已配、契约 lint。
+状态含义：`READY`（可用）/`DEGRADED`（可选依赖缺失，可继续）/`BLOCKED`（必需依赖缺失，必须先补）。
+
+技能库更新走各自仓库的 `git pull`，插件不做二次封装；`scripts/check_upstream_updates.py`
+按 commit 比对列出哪些上游已漂移（需网络）。

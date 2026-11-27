@@ -32,7 +32,24 @@ def sha256(path: Path) -> str:
 
 
 def files_under(source: Path) -> list[Path]:
-    return [p for p in source.rglob("*") if p.is_file() and not any(x in IGNORED for x in p.parts)]
+    """递归列出源目录下的文件，按**相对 source 的路径**排除依赖/构建目录。
+
+    原实现检查 p.parts（绝对路径的每一段）：源目录只要在 .../build/... 或
+    .../dist/... 下，所有文件都会被当成"需忽略"，导入计划直接变空。
+    """
+    source = source.resolve()
+    out = []
+    for p in source.rglob("*"):
+        if not p.is_file():
+            continue
+        try:
+            rel_parts = p.resolve().relative_to(source).parts
+        except (ValueError, OSError):
+            continue
+        if any(part in IGNORED for part in rel_parts):
+            continue
+        out.append(p)
+    return out
 
 
 def kind(path: Path) -> str:
@@ -132,6 +149,50 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+def _free_target(target: Path) -> Path:
+    """为一个非空目标挑一个不覆盖的名字：x.md → x_imported.md → x_imported2.md → …
+
+    原实现只把目标改成 `<stem>_imported<suffix>` 一次；若该文件已存在
+    （第二次之后的重复导入），后续 write_text/copy2 会**静默覆盖**它——
+    与声明的 `overwrite: false / originals_preserved` 策略直接矛盾，
+    用户手工修订过的导入稿会被下一次同步导入抹掉。
+    """
+    if not target.exists():
+        return target
+    stem, suffix = target.stem, target.suffix
+    candidate = target.with_name(f"{stem}_imported{suffix}")
+    index = 1
+    while candidate.exists():
+        index += 1
+        candidate = target.with_name(f"{stem}_imported{index}{suffix}")
+    return candidate
+
+
+def _conversion_task_path(project: Path, entry: dict, src: Path) -> Path:
+    """转换任务路径：默认 `state/latex_conversion/<stem>/task.json`（文档约定）。
+
+    但不同目录下的同名源文件（a/paper.md 与 b/paper.md）都映射到同一个
+    `<stem>/`，后写者会静默覆盖前者的任务文件。冲突时用相对路径的短哈希
+    区分：`<stem>__<hash8>/`，既保留默认约定又不丢任务。
+    """
+    base = project / STATE / "latex_conversion" / src.stem
+    default = base / "task.json"
+    relative = entry.get("relative") or src.name
+    if (default.exists()
+            and _read_json_quiet(default).get("source_files", [{}])[0].get("path") != entry.get("source")):
+        digest = hashlib.sha256(str(relative).encode("utf-8")).hexdigest()[:8]
+        return project / STATE / "latex_conversion" / f"{src.stem}__{digest}" / "task.json"
+    return default
+
+
+def _read_json_quiet(path: Path) -> dict:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def apply_plan(plan: dict, source: Path, project: Path) -> None:
     for entry in plan["entries"]:
         if entry["action"] != "copy":
@@ -140,7 +201,7 @@ def apply_plan(plan: dict, source: Path, project: Path) -> None:
         target = project / entry["target"]
         target.parent.mkdir(parents=True, exist_ok=True)
         if target.exists():
-            target = target.with_name(target.stem + "_imported" + target.suffix)
+            target = _free_target(target)
             entry["target"] = target.relative_to(project).as_posix()
             entry["action"] = "copy_without_overwrite"
         if src.suffix.lower() in {".md", ".markdown"}:
@@ -149,14 +210,14 @@ def apply_plan(plan: dict, source: Path, project: Path) -> None:
             task = conversion_task(entry)
             task_path = target.parent / "conversion_task.json"
             write_text(task_path, json.dumps(task, ensure_ascii=False, indent=2) + "\n")
-            state_task = project / STATE / "latex_conversion" / src.stem / "task.json"
+            state_task = _conversion_task_path(project, entry, src)
             write_text(state_task, json.dumps(task, ensure_ascii=False, indent=2) + "\n")
         else:
             shutil.copy2(src, target)
             if src.suffix.lower() in {".pdf", ".docx"}:
                 entry["conversion"] = "task_required"
                 task = conversion_task(entry)
-                task_path = project / STATE / "latex_conversion" / src.stem / "task.json"
+                task_path = _conversion_task_path(project, entry, src)
                 write_text(task_path, json.dumps(task, ensure_ascii=False, indent=2) + "\n")
     state = project / STATE
     state.mkdir(parents=True, exist_ok=True)

@@ -1,0 +1,415 @@
+{
+  "version": "1.2",
+  "updated": "2026-11-26",
+  "note": "能力地图：path 指向 zcode 技能入口；豆包通过 Junction 引用同一入口。总控只存角色、能力边界、输入输出、交接与依赖，不存子技能流程。 ｜ 2.0.0 可移植化：path/entry 改用 $SKILLS_ROOT/<name>，运行时由 scripts/_roots.py 在多根下解析（支持插件内分发、同仓并列、~/.zcode/skills、~/.agents/skills、项目内 skills）。",
+  "stage_order": [
+    "S0",
+    "S1",
+    "S2",
+    "S2b",
+    "S3",
+    "S4"
+  ],
+  "presets": [
+    {
+      "name": "data_to_submission",
+      "when": "有原始数据，要一路做到投稿级成品图",
+      "sequence": [
+        {
+          "stage": "S0",
+          "role": "decide"
+        },
+        {
+          "stage": "S1",
+          "role": "produce"
+        },
+        {
+          "stage": "S2",
+          "role": "audit"
+        }
+      ]
+    },
+    {
+      "name": "existing_to_submission",
+      "when": "已有成图，只做期刊规范修订/审计/导出",
+      "sequence": [
+        {
+          "stage": "S2",
+          "role": "audit"
+        }
+      ]
+    },
+    {
+      "name": "idea_to_framework",
+      "when": "概念/方法框架图，既要可编辑源又要期刊风格",
+      "sequence": [
+        {
+          "stage": "S3",
+          "role": "structure"
+        },
+        {
+          "stage": "S2",
+          "role": "audit"
+        }
+      ]
+    },
+    {
+      "name": "multi_figure_consistency",
+      "when": "一套多张图，需要统一风格与顺序",
+      "sequence": [
+        {
+          "stage": "S1",
+          "role": "produce"
+        },
+        {
+          "stage": "S2",
+          "role": "audit"
+        }
+      ],
+      "note": "每张图一个主生产者；S2 只做统一审计与修改项，不接管生产"
+    },
+    {
+      "name": "image_to_editable",
+      "when": "截图/位图要变可编辑交付",
+      "sequence": [
+        {
+          "stage": "S2b|S3|S4",
+          "role": "convert"
+        }
+      ],
+      "note": "按目标格式择一：PPTX→S2b；drawio→S3；vsdx→S4"
+    }
+  ],
+  "skills": [
+    {
+      "slot": "S0",
+      "stage": "S0",
+      "name": "scipilot-figure-skill",
+      "path": "$SKILLS_ROOT/scipilot-figure-skill",
+      "entry": "$SKILLS_ROOT/scipilot-figure-skill/SKILL.md",
+      "repo": "https://github.com/Haojae/scipilot-figure-skill.git",
+      "stars": 2837,
+      "role": "decide",
+      "best_at": [
+        "数据画像与图型选择",
+        "误导性画法拦截",
+        "统计标注方案设计（不跑检验）",
+        "首版草图"
+      ],
+      "inputs": [
+        "CSV/XLSX/DataFrame 路径",
+        "研究问题与分组变量",
+        "目标期刊或使用场合"
+      ],
+      "outputs": [
+        "选图/风险决策（plan）",
+        "可选首版图",
+        "统计标注方案"
+      ],
+      "not_for": [
+        "机制图/流程图/架构图",
+        "已有成品图的规范审计",
+        "纯统计检验（检验本身不属于绘图）"
+      ],
+      "done_when": [
+        "子技能自带检查/QA 完成并回报",
+        "决策含选图理由、替代方案与风险拦截",
+        "统计检验/误差/n 由用户确认，不是总控编造"
+      ],
+      "requires_files": [
+        "scripts/profile_data.py",
+        "scripts/check_figure.py",
+        "scripts/export_figure.py",
+        "references/chart_selection.md",
+        "references/viz_pitfalls.md",
+        "references/plot_recipes.md"
+      ],
+      "depends": [
+        "matplotlib",
+        "seaborn",
+        "pandas",
+        "scipy"
+      ],
+      "fallback": [
+        "S0 不可用 → 直接交 S1/S2 出图，并在台账记录“未做选图决策”"
+      ]
+    },
+    {
+      "slot": "S1",
+      "stage": "S1",
+      "name": "scientific-figure-making",
+      "path": "$SKILLS_ROOT/scientific-figure-making",
+      "entry": "$SKILLS_ROOT/scientific-figure-making/SKILL.md",
+      "repo": "https://github.com/ChenLiu-1996/figures4papers.git",
+      "stars": 11892,
+      "role": "produce",
+      "best_at": [
+        "可复现的 matplotlib 投稿图",
+        "figures4papers house style",
+        "多面板基础拼版",
+        "代码交付"
+      ],
+      "inputs": [
+        "数据路径或 DataFrame",
+        "核心结论与图型",
+        "目标期刊/尺寸",
+        "共享 figure-system（可选）"
+      ],
+      "outputs": [
+        "plot.py（可复现脚本）",
+        "fig.pdf/svg",
+        "preview.png"
+      ],
+      "not_for": [
+        "交互式看板（Plotly/Altair/Bokeh）",
+        "概念示意图",
+        "纯统计检验",
+        "以 3D/GIS/Illustrator/Figma 为主的工作流"
+      ],
+      "done_when": [
+        "子技能自带检查完成并回报",
+        "脚本可二次运行（由子技能确认）",
+        "产物路径回报"
+      ],
+      "requires_files": [
+        "references/tutorials.md",
+        "references/api.md",
+        "references/common-patterns.md",
+        "references/design-theory.md",
+        "references/demos.md"
+      ],
+      "depends": [
+        "matplotlib",
+        "numpy",
+        "pandas"
+      ],
+      "fallback": [
+        "S1 跑不通 → 改 S2 的 Python 路线，记录“非 S1 产出”"
+      ]
+    },
+    {
+      "slot": "S2",
+      "stage": "S2",
+      "name": "nature-figure",
+      "path": "$SKILLS_ROOT/nature-figure",
+      "entry": "$SKILLS_ROOT/nature-figure/SKILL.md",
+      "repo": "https://github.com/Yuan1z0825/nature-skills.git",
+      "stars": 53682,
+      "role": "audit",
+      "best_at": [
+        "期刊规范审计/修订/导出",
+        "多面板证据结构与面板对齐",
+        "graphical abstract",
+        "可编辑矢量示意图",
+        "Python/R 双后端"
+      ],
+      "inputs": [
+        "成图 PDF/SVG/PNG，或数据+图契约",
+        "目标期刊与尺寸",
+        "共享 figure-system（可选）"
+      ],
+      "outputs": [
+        "审计问题清单",
+        "修订图 PDF/SVG",
+        "子技能 QA 结果",
+        "多面板 alignment 记录"
+      ],
+      "not_for": [
+        "交互式看板",
+        "数据清洗",
+        "纯统计分析"
+      ],
+      "done_when": [
+        "子技能自带 QA 完成并回报",
+        "审计问题清单与修订路径齐全",
+        "多面板图序与论证一致（由子技能确认）"
+      ],
+      "requires_files": [
+        "manifest.yaml",
+        "static/core/contract.md",
+        "static/core/stance.md",
+        "scripts/validate_figure.py",
+        "scripts/audit_pdf_text.py",
+        "scripts/audit_panel_alignment.py",
+        "scripts/audit_figure_collisions.py"
+      ],
+      "depends": [
+        "PyMuPDF",
+        "Python 或 R 绘图后端"
+      ],
+      "fallback": [
+        "S2 不可用 → S1 生产 + 人工/其他审计；不能声称已过期刊审计"
+      ],
+      "support": "nature-shared 与 nature-figure 同仓库 skills 目录，必须作为同级入口存在"
+    },
+    {
+      "slot": "S2b",
+      "stage": "S2b",
+      "name": "nature-image2ppt",
+      "path": "$SKILLS_ROOT/nature-image2ppt",
+      "entry": "$SKILLS_ROOT/nature-image2ppt/SKILL.md",
+      "repo": "https://github.com/Yuan1z0825/nature-skills.git",
+      "stars": 53682,
+      "role": "convert",
+      "best_at": [
+        "位图/扫描 PDF → 对象级可编辑 PPTX",
+        "逐页视觉复核",
+        "页级状态机"
+      ],
+      "inputs": [
+        "源图/扫描 PDF",
+        "目标页数与尺寸",
+        "OCR/图像后端选择"
+      ],
+      "outputs": [
+        "deck.pptx",
+        "逐页视觉复核证据"
+      ],
+      "not_for": [
+        "从研究笔记新做一套 PPT（走普通 PPT 技能）",
+        "必须 .vsdx 的交付（走 S4）"
+      ],
+      "done_when": [
+        "子技能逐页 QA 完成，无 pending 页",
+        "页数与源一致",
+        "最终 QA 通过并回报"
+      ],
+      "requires_files": [
+        "cli/image2ppt/cli.py",
+        "config.yaml",
+        "schemas",
+        "scripts/run_image2ppt_qa.py"
+      ],
+      "depends": [
+        "pypdfium2",
+        "Pillow",
+        "PyYAML",
+        "PaddleOCR token（可选）",
+        "OpenAI Images API（可选）",
+        "PowerPoint COM（可选）"
+      ],
+      "fallback": [
+        "OCR token 未配 → 本地 builtin-ink；仍不可用 → 报告能力缺口，不假装识别"
+      ]
+    },
+    {
+      "slot": "S3",
+      "stage": "S3",
+      "name": "drawio-skill",
+      "path": "$SKILLS_ROOT/drawio-skill",
+      "entry": "$SKILLS_ROOT/drawio-skill/SKILL.md",
+      "repo": "https://github.com/Agents365-ai/drawio-skill.git",
+      "stars": 10782,
+      "role": "structure",
+      "best_at": [
+        "可编辑 .drawio 源文件",
+        "架构/流程/泳道/UML/多视图",
+        "代码/IR → 图",
+        "截图/白板 → drawio"
+      ],
+      "inputs": [
+        "概念/流程说明，或 IR/源码/截图",
+        "目标格式与画布尺寸",
+        "共享 figure-system（可选）"
+      ],
+      "outputs": [
+        ".drawio 源文件",
+        "PNG/SVG/PDF/PPTX 导出",
+        "可选 IR JSON"
+      ],
+      "not_for": [
+        "数据图表",
+        "必须 .vsdx 的交付"
+      ],
+      "done_when": [
+        "子技能 XML/导出检查完成并回报",
+        "产物路径回报"
+      ],
+      "requires_files": [
+        "scripts/diagramctl.py",
+        "references/diagram-types.md",
+        "references/xml-authoring.md",
+        "references/diagram-ir.md"
+      ],
+      "depends": [
+        "Graphviz（自动布局，可选）",
+        "draw.io CLI（原生导出，可选）"
+      ],
+      "fallback": [
+        "S3 不可用 → S2 vector schematic（SVG），明确“不是 drawio”"
+      ]
+    },
+    {
+      "slot": "S4",
+      "stage": "S4",
+      "name": "visio-image-rebuilder",
+      "path": "$SKILLS_ROOT/visio-image-rebuilder",
+      "entry": "$SKILLS_ROOT/visio-image-rebuilder/SKILL.md",
+      "repo": "https://github.com/pengjunchi0/codex-visio-paper-figure-skill.git",
+      "stars": 1200,
+      "role": "rebuild",
+      "best_at": [
+        "原生 .vsdx 重建",
+        "改现有 Visio 的颜色/版式/坐标",
+        "多格式导出"
+      ],
+      "inputs": [
+        "参考图或现有 .vsdx",
+        "目标页数与画布尺寸",
+        "字体/配色要求"
+      ],
+      "outputs": [
+        ".vsdx（原生形状）",
+        "PNG/SVG/PDF/PPTX 导出",
+        "preview.png"
+      ],
+      "not_for": [
+        "没有 Visio 环境时的唯一方案",
+        "纯数据图",
+        "只要 PPTX 的图片还原（走 S2b）"
+      ],
+      "done_when": [
+        "子技能验收完成并回报",
+        "改现有文件前已备份",
+        "产物路径回报"
+      ],
+      "requires_files": [
+        "scripts/visio_rebuild_scaffold.ps1",
+        "scripts/visio_page_tools.ps1",
+        "references/rebuild-guidelines.md"
+      ],
+      "depends": [
+        "Microsoft Visio COM"
+      ],
+      "fallback": [
+        "S4 不可用 → S3 .drawio，明确“不是 .vsdx”"
+      ]
+    }
+  ],
+  "shared_context": {
+    "figure_system": "由 S2（nature-figure）在其工作目录生成/维护；总控只把路径传给生产者，不自己定义字号/色板/DPI",
+    "owner": "nature-figure"
+  },
+  "fallbacks": [
+    {
+      "when": "S3 不够贴合论文语义且不需要 .drawio 源",
+      "use": "nature-figure 的 vector schematic 路线",
+      "installed": true,
+      "note": "产出可编辑 SVG，不是 drawio"
+    },
+    {
+      "when": "S3 需要更偏论文框架图的现成模板",
+      "use": "paper-framework-figure-studio-pro",
+      "installed": false,
+      "note": "未注册；需要时再决定入口"
+    }
+  ],
+  "support": [
+    {
+      "name": "nature-shared",
+      "path": "C:\\Users\\11352\\.zcode\\skills\\nature-shared",
+      "entry": "C:\\Users\\11352\\.zcode\\skills\\nature-shared\\SKILL.md",
+      "note": "nature-figure 通过 ../nature-shared 读取；zcode 与豆包技能根目录均需存在同名入口"
+    }
+  ]
+}

@@ -668,7 +668,13 @@ def write_scope_report(root: str, node: str, round_no: int, scope_id: str,
 
 def record_empty_return(root: str, node: str, round_no: int, scope_id: str,
                         attempt: int, reason: str, last_result: Any = None) -> str:
-    """Persist an EMPTY_RETURN recovery record and block the scope."""
+    """Persist an EMPTY_RETURN recovery record and block the scope.
+
+    Called by :func:`aggregate_scopes` whenever a scope claims completed phases
+    without any non-empty scope report.  ``recovery.json`` is kept in its own
+    ``recovery_ref`` field (not ``report_refs``) so that a recovery record can
+    never be mistaken for a substantive report on a later aggregate run.
+    """
     safe_id = safe_scope_id(scope_id)
     path = _manifest_path(root, node, int(round_no), safe_id)
     if not os.path.isfile(path):
@@ -684,31 +690,144 @@ def record_empty_return(root: str, node: str, round_no: int, scope_id: str,
     manifest["phase"] = "RECOVERY"
     manifest["attempt"] = int(attempt)
     manifest.setdefault("phase_status", {})["RECOVERY"] = "BLOCKED"
-    manifest["report_refs"] = list(dict.fromkeys(manifest.get("report_refs", []) + [rel]))
+    manifest["recovery_ref"] = rel
     manifest["updated_at"] = recovery["timestamp"]
     _atomic_json(path, manifest)
     _write_handoff(os.path.dirname(path), manifest)
     return rel
 
 
+def _scope_report_has_content(root: str, relative: str) -> bool:
+    """Return True when a scope report exists and carries a non-empty payload."""
+    path = _repo_path(root, relative)
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return False
+    try:
+        payload = _load_json(path)
+    except (OSError, ValueError):
+        # A corrupt report is a review failure, not an EMPTY_RETURN; only
+        # emptiness is judged here so corruption is not silently swallowed.
+        return True
+    if isinstance(payload, dict):
+        return bool(payload)
+    if isinstance(payload, (list, tuple, set)):
+        return bool(payload)
+    if isinstance(payload, str):
+        return bool(payload.strip())
+    return payload is not None
+
+
+# Phase subdirectories inside a scope workspace that hold Agent products.  Root
+# level files (manifest/plans/handoff/recovery) are machine bookkeeping and are
+# deliberately excluded, so recovery.json can never count as an artifact.
+SCOPE_ARTIFACT_DIRS = ("content_review", "format_review", "content_repair",
+                       "format_repair", "re_review", "evidence")
+
+
+def _workspace_has_artifacts(root: str, manifest: Dict[str, Any]) -> bool:
+    """True when a scope workspace contains any non-empty Agent-produced file.
+
+    Agents are documented to write shard reports straight into the phase
+    subdirectories (``content_review/<run_id>.json`` etc.) and are not obliged
+    to call ``write_scope_report``, so both registration paths must count.
+    """
+    workspace = manifest.get("output_scope") or ""
+    if not workspace:
+        return False
+    try:
+        base = _repo_path(root, workspace)
+    except ScopeError:
+        return False
+    for phase_dir in SCOPE_ARTIFACT_DIRS:
+        directory = os.path.join(base, phase_dir)
+        if not os.path.isdir(directory):
+            continue
+        for entry, dirnames, filenames in os.walk(directory):
+            dirnames[:] = [name for name in dirnames if not name.startswith(".")]
+            for filename in filenames:
+                if filename.startswith(".") or filename.endswith((".pyc", ".tmp", ".swp")):
+                    continue
+                path = os.path.join(entry, filename)
+                try:
+                    if os.path.isfile(path) and os.path.getsize(path) > 0:
+                        return True
+                except OSError:
+                    continue
+    return False
+
+
+# Phases whose completion is judged by the orchestrator from state/reports and
+# round records rather than by an artifact written into the scope workspace.
+ORCHESTRATOR_PHASES = frozenset({"PLAN", "DISPATCH", "SCORE", "DECIDE", "PROMOTE"})
+
+
+def _empty_scope_reason(root: str, manifest: Dict[str, Any]) -> Optional[str]:
+    """Return the EMPTY_RETURN reason when a scope claims work without artifacts.
+
+    This is the aggregate-stage trigger for the EMPTY_RETURN gate documented in
+    ``mm-iteration-engine`` / ``academic-orchestration``: a scope whose Agent
+    only reports "completed" but leaves no non-empty scope report must be
+    blocked and recorded through :func:`record_empty_return`.  A scope that is
+    still dispatching (no work phase completed yet) is not an empty return, and
+    orchestrator-judged phases (SCORE/DECIDE report into ``state/reports``) are
+    not evidence of Agent output either.
+    """
+    statuses = manifest.get("phase_status") or {}
+    required = manifest.get("required_phases") or list(REQUIRED_PHASES)
+    claimed = [phase for phase in required
+               if phase not in ORCHESTRATOR_PHASES and statuses.get(phase) in COMPLETE_STATUSES]
+    if not claimed:
+        return None
+    refs = [ref for ref in (manifest.get("report_refs") or []) if ref]
+    if any(_scope_report_has_content(root, ref) for ref in refs):
+        return None
+    if _workspace_has_artifacts(root, manifest):
+        return None
+    return ("scope {} claims completed phases ({}) but produced no non-empty scope report "
+            "(report_refs={})".format(manifest.get("scope_id"), ", ".join(claimed), len(refs)))
+
+
 def aggregate_scopes(root: str, node: str, round_no: int,
                      scope_id: Optional[str] = None) -> Dict[str, Any]:
-    """Validate required phases for one scope or all scopes in a round."""
+    """Validate required phases and artifacts for one scope or all scopes in a round.
+
+    Scopes that claim completed phases without producing any non-empty report
+    are routed through :func:`record_empty_return`: a ``recovery.json`` is
+    written inside the scope workspace, the scope manifest is set to
+    ``BLOCKED``/``RECOVERY``, and the aggregate result is blocked.
+    """
     paths = _manifest_files(root, node, int(round_no), scope_id)
     if not paths:
         raise ScopeError("no scope workspaces found for {}/round{}".format(node, round_no))
     records = []
     missing_all = []
+    empty_returns = []
+    empty_paths = set()
     for path in paths:
         manifest = _read_manifest(path)
         missing = _missing_phases(manifest)
+        empty_reason = _empty_scope_reason(root, manifest)
+        manifest_scope_id = manifest.get("scope_id") or os.path.basename(os.path.dirname(path))
+        if empty_reason:
+            recovery_rel = record_empty_return(
+                root, node, int(round_no), manifest_scope_id,
+                int(manifest.get("attempt") or 1), empty_reason,
+                last_result={"report_refs": manifest.get("report_refs") or []})
+            empty_paths.add(path)
+            empty_returns.append({"scope_id": manifest_scope_id, "reason_code": "EMPTY_RETURN",
+                                  "reason": empty_reason, "recovery": recovery_rel})
+            manifest = _read_manifest(path)
+        blocked = bool(missing) or bool(empty_reason)
         if missing:
-            missing_all.append({"scope_id": manifest.get("scope_id"), "phases": missing})
-        records.append({"scope_id": manifest.get("scope_id"), "workspace": manifest.get("output_scope"),
-                        "phase": "AGGREGATE", "status": "PASS" if not missing else "BLOCKED",
-                        "missing_phases": missing, "attempt": manifest.get("attempt"),
-                        "run_id": manifest.get("run_id")})
-    status = "PASS" if not missing_all else "BLOCKED"
+            missing_all.append({"scope_id": manifest_scope_id, "phases": missing})
+        record = {"scope_id": manifest_scope_id, "workspace": manifest.get("output_scope"),
+                  "phase": "AGGREGATE", "status": "PASS" if not blocked else "BLOCKED",
+                  "missing_phases": missing, "attempt": manifest.get("attempt"),
+                  "run_id": manifest.get("run_id")}
+        if empty_reason:
+            record["reason_code"] = "EMPTY_RETURN"
+        records.append(record)
+    status = "PASS" if not missing_all and not empty_returns else "BLOCKED"
     generated = utc_now()
     plan = {"version": "1.0", "generated_at": generated, "node": node, "round": int(round_no),
             "scope_id": scope_id, "scope_key": "{}:r{}".format(node, int(round_no)),
@@ -716,10 +835,14 @@ def aggregate_scopes(root: str, node: str, round_no: int,
             "attempt": max(int(item.get("attempt") or 1) for item in records),
             "run_id": "aggregate-{}-r{}".format(node.lower(), int(round_no)),
             "registry_sha256": _registry_hash(root), "required_phases": list(required_phases_for(node)),
-            "scopes": records, "missing_phases": missing_all}
+            "scopes": records, "missing_phases": missing_all, "empty_returns": empty_returns}
     round_rel = "{}/{}/round_{}".format(REVIEWS_DIR, node, int(round_no))
     _atomic_json(_repo_path(root, round_rel + "/aggregate_plan.json"), plan)
     for path in paths:
+        if path in empty_paths:
+            # record_empty_return already marked this scope BLOCKED/RECOVERY;
+            # never overwrite that with an "aggregated" status.
+            continue
         manifest = _read_manifest(path)
         missing = _missing_phases(manifest)
         if not missing:
@@ -733,6 +856,30 @@ def aggregate_scopes(root: str, node: str, round_no: int,
 
 
 def _set_parent_completed(root: str, node: str) -> None:
+    """把父节点置 completed —— 必须过统一完成守卫（P0）。
+
+    scope 全绿只说明"分片都做完了"，**不等于**父节点满足完成条件：
+    上游节点可能未完成、本节点门禁可能没过、也可能从未 node-start。
+    这是第 5 条写 completed 的路径（前四条是 node-finish / round-decide /
+    result-ingest / gate-set），遗漏它会让整条门禁体系被 scope 流程旁路。
+    """
+    # 延迟导入：state_scopes 会被复制进项目 state/，与 state_guard 同级，
+    # 但独立导入本模块（如单测）时未必存在，故放在函数内并给出可理解的报错。
+    try:
+        from state_guard import require_completion_allowed
+    except ImportError as exc:  # pragma: no cover - 仅在残缺部署下触发
+        raise ScopeError(
+            f"无法加载完成守卫 state_guard（{exc}）；scope-promote 拒绝在无门禁校验时推进父节点"
+        ) from exc
+    try:
+        require_completion_allowed(root, node)
+    except SystemExit as exc:
+        raise ScopeError(
+            f"scope-promote 拒绝把 {node} 标为 completed：{exc}\n"
+            f"  scope 分片全绿只是必要条件；还须 node-start、上游 completed、"
+            f"本节点门禁 PASS、产物与快照齐备。"
+        ) from exc
+
     path = os.path.join(os.path.abspath(root), STATE_FILE.replace("/", os.sep))
     state = _load_json(path)
     if not isinstance(state, dict):

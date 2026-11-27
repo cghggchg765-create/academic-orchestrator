@@ -11,6 +11,7 @@
 用法:
   python scripts/validate_data_lineage.py Data/data-lineage.json --root .
   python scripts/validate_data_lineage.py Data/data-lineage.json --root . --json
+  python scripts/validate_data_lineage.py Data/data-lineage.json --root . --require-schema
   python scripts/validate_data_lineage.py --check-raw    # 只查 raw 是否被改动
 
 退出码：0 = 全部通过；1 = 有 FAIL；2 = 文件/schema 问题
@@ -301,18 +302,30 @@ def verify_stages(payload: dict, root: Path, f: Findings) -> None:
         prev_outputs, prev_label = outs, name
 
 
-def verify_raw_lock(root: Path, f: Findings) -> None:
+def verify_raw_lock(payload: dict, root: Path, f: Findings) -> None:
     """独立 raw 锁定基线校验（若存在 Data/raw_lock.json 则以它为准）。
 
     这解决了"raw 哈希由 dataprep 自己登记 → 先改后登记"的漏洞：
     raw_lock 由主 Agent 在 N0/N1（处理前）建立，dataprep 无权改写。
+
+    P1-17：raw.files 非空却没有锁定基线时判 FAIL——否则"原始数据只读"
+    只在建立 lock 之后才成立，D1 可以完全不依赖 lock 而通过。
+    raw.files 为空时维持原有的 WARN 判定（无原始数据可锁）。
     """
     lock_path = root / "Data" / "raw_lock.json"
+    raw_files = (payload.get("raw") or {}).get("files") or []
     if not lock_path.exists():
-        f.check("raw_lock.present", False,
-                "未建立原始数据锁定基线 Data/raw_lock.json（无法证明处理前 raw 未被改动）",
-                severity="WARN",
-                ok_detail="raw 锁定基线存在")
+        if raw_files:
+            f.check("raw_lock.present", False,
+                    "未建立原始数据锁定基线 Data/raw_lock.json（无法证明处理前 raw 未被改动）："
+                    "raw.files 非空时必须先用 python scripts/raw_lock.py --root <项目> "
+                    "建立处理前基线",
+                    ok_detail="raw 锁定基线存在")
+        else:
+            f.check("raw_lock.present", False,
+                    "未建立原始数据锁定基线 Data/raw_lock.json（无法证明处理前 raw 未被改动）",
+                    severity="WARN",
+                    ok_detail="raw 锁定基线存在")
         return
     try:
         lock = json.loads(lock_path.read_text(encoding="utf-8"))
@@ -336,11 +349,16 @@ def verify_raw_lock(root: Path, f: Findings) -> None:
                 ok_detail=f"{rel} 与 raw 锁定基线一致")
 
 
-def verify_schema(payload: dict, root: Path, f: Findings) -> None:
+def verify_schema(payload: dict, root: Path, f: Findings,
+                  require_schema: bool = False) -> None:
     """用 data_lineage.schema.json 做结构校验（原 schema 完全未被使用，属契约空转）。
 
     jsonschema 为可选依赖：装了才做结构校验，没装则记 WARN 不阻塞
     （语义层检查仍会跑，不致因缺库而失效）。
+
+    require_schema=True（CLI --require-schema）时，jsonschema 缺失判 FAIL：
+    契约明确要求结构校验，缺库不得静默降级——否则 minItems/enum/pattern/required
+    在缺库环境里全部失效，把 stages[0].inputs 置空也能过。
     """
     schema_path = None
     here = Path(__file__).resolve().parent
@@ -358,9 +376,14 @@ def verify_schema(payload: dict, root: Path, f: Findings) -> None:
     try:
         import jsonschema
     except ImportError:
-        f.check("schema.enforced", False,
-                "未安装 jsonschema，跳过结构校验（pip install jsonschema 可启用）",
-                severity="WARN", ok_detail="结构校验已启用")
+        if require_schema:
+            f.check("schema.enforced", False,
+                    "要求结构校验（--require-schema）但未安装 jsonschema："
+                    "minItems/enum/pattern/required 无法生效——pip install jsonschema")
+        else:
+            f.check("schema.enforced", False,
+                    "未安装 jsonschema，跳过结构校验（pip install jsonschema 可启用）",
+                    severity="WARN", ok_detail="结构校验已启用")
         return
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -411,6 +434,8 @@ def main() -> int:
     ap.add_argument("--root", type=Path, default=Path("."), help="项目根目录")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--check-raw", action="store_true", help="只校验 raw 是否被改动（快速）")
+    ap.add_argument("--require-schema", action="store_true",
+                    help="结构校验必需：jsonschema 不可用时判 FAIL（默认仅 WARN）")
     args = ap.parse_args()
 
     if not args.ledger or not args.ledger.exists():
@@ -429,8 +454,8 @@ def main() -> int:
 
     f = Findings()
     verify_raw(payload, args.root, f)
-    verify_raw_lock(args.root, f)
-    verify_schema(payload, args.root, f)
+    verify_raw_lock(payload, args.root, f)
+    verify_schema(payload, args.root, f, require_schema=args.require_schema)
     if not args.check_raw:
         verify_stages(payload, args.root, f)
         verify_invariants(payload, f)

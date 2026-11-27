@@ -218,12 +218,17 @@ metadata:
 **Phase 7 — 论文撰写（→ writing，分片迭代环）**
 - 先由 orchestrator 执行 `scope-plan N7 --round <n> --mode adaptive --apply`，按章节自适应拆分；“模型建立与求解”等超长章节继续按子问题/小节拆分。每个 scope 只携带目标文件、限定上下文和证据指针，**禁止把整篇论文一次性传入 Agent**。
 - 首轮对每个 scope 并行派发两个只读审阅：`reviewer` 做内容/证据审阅，`latex_linter` 做格式/编译静态检查；审阅结果分别落入 scope 工作区，不互相覆盖。
-- 等全部首轮审阅完成后，由 orchestrator 汇总为 `aggregate_plan.json`，按 scope 分类问题并派发修复；reviewer/linter 只报告，不能改业务文件。
+- 等全部首轮审阅完成后，**汇总必须走命令，不得手拼 JSON**：执行
+  `python state/state_utils.py scope-aggregate N7 --round <n>`
+  → 生成 `aggregate_plan.json`，按 scope 分类问题并列出缺失阶段（`empty_returns` 即命中 `EMPTY_RETURN` 的 scope）。
+  手写 `aggregate_plan.json` 会绕过空返回检测（`record_empty_return` 只由该命令触发）。reviewer/linter 只报告，不能改业务文件。
 - **内容修订阶段先行且写入串行**：按 scope 逐个派 `writing`，只允许修改声明的章节/小节；任何内容 scope 未通过复审前，不得派 `typesetting` 修改共享 `.tex`、`preamble` 或交叉引用。
 - 每个内容 scope 修订后重新派 `reviewer` 复审，逐条关闭 feedback（≤2 次）；所有内容 scope PASS 后，才进入排版阶段。
 - **排版修订阶段串行**：派 `typesetting` 处理图题、表注、浮动位置、章节顺序和间距；不得改数学论点、算法结论或数据。排版后必须重新编译。
 - 编译通过后，派 `latex_linter` 做全局/分片格式复核，同时派 `reviewer` 做反向内容复核；最后由 reviewer 做一次 join review，检查全文章节顺序、编号、交叉引用、术语、摘要、参考文献和跨章节逻辑。
-- 仅当所有 scope、join review、latex_linter、编译和 W1/A2/W2 门禁通过后，才执行 `round-score` → `round-decide`；单个 scope 完成不得把 N7 父节点标记 completed。
+- 仅当所有 scope、join review、latex_linter、编译和 W1/A2/W2 门禁通过后，才执行
+  `python state/state_utils.py scope-promote N7 --round <n>` 提升父节点
+  （`scope-promote` 会逐个验证 scope 已通过，任一未过则拒绝提升），再 `round-score` → `round-decide`；单个 scope 完成不得把 N7 父节点标记 completed。
 - scope 空返回或缺少 artifact/检查结果时标记 `EMPTY_RETURN`，只自动重试一次；第二次仍空立即 `BLOCKED/ESCALATE`，不得无限等待或主对话内联代做。
 - W1 + A2 + W2 通过且迭代达标后，请求用户执行 **H3 人工确认**（论文整体印象；用户不在时写 human_checkpoint.md 挂起）
 - 不通过 → 只返回对应 scope 的 writing/typesetting 修复，不重复重跑已 PASS 的 scope。
@@ -467,17 +472,27 @@ metadata:
 
 ### A. 并行启动（非阻塞）
 
-派发可独立推进的节点时，显式置后台并立刻记录句柄：
+派发可独立推进的节点时，显式置后台并立刻登记句柄（**必须走命令，不要手写 JSON**）：
 
 ```
 Agent(subagent_type=<executor>, prompt=<含 must_load 的派发包>, run_in_background=true)
   → 返回 {status:"async_launched", agentId, outputFile}
-  → 立即写入 state/agents/<id>/dispatch.json
-    {agentId, node, round, started_at, must_load, status:"running"}
+  → 立即登记（落 state/agents/dispatch/<agentId>.json）：
+    python state/state_utils.py dispatch-start <agentId> --node <Nx> \
+      --must-load "<逗号分隔技能清单>" [--round <n>] [--writes "Code/Q1,ResultFigures/"]
 ```
+
+`--writes` 用于声明该 Agent 将要写入的路径（可选但推荐）：`project-audit` 会两两比对在途 Agent 的写入目标，
+同一路径或互为上下级即报冲突——这是「同一业务文件只允许一个写入者」唯一的机器检查点，不填就不报。
 
 **并行上限**：同一批 ≤3 个（与既有「每批并行 ≤3」铁律一致）。
 **互斥规则**：同一业务文件只允许一个写入者；审阅（只读）可并行，写入必须串行（见 N7 scope 协议）。
+
+> 生命周期：`dispatch-start` 创建 → 子 Agent 每次 `checkpoint` 自动续期（无需额外命令；长 Phase 可显式
+> `dispatch-heartbeat <agentId>`）→ 收尾由 `result-ingest` 自动关闭，或主动 `dispatch-close <agentId> --status done`。
+> 僵尸判定：`status=running` 且超过 `--ttl`（默认 1800s）无活动 → `project-audit` 报 `dispatch.zombies`，
+> 用 `dispatch-close --status timeout` 收尾。同 `agentId` 已有在途记录时 `dispatch-start` 会拒绝（防重复派发），
+> 确需接管加 `--force`（会在新记录里留 `previous_dispatch` 痕迹）。
 
 ### B. 等待期间主 Agent 做什么（不空转）
 
@@ -521,22 +536,65 @@ SendMessage(to: <agentId>, summary: "<10 字内>", message: """
 
 子 Agent 应通过 `RespondToCoordinator` 回执确认（收到 "The coordinator sent a message while you were working:" 前缀时）。
 
-### D. 纠偏留痕（可审计）
+> ⚠️ `RespondToCoordinator` 是宿主工具，插件无法强制拦截，也读不到它的投递结果。
+> **因此它不是唯一回执渠道**：子 Agent 还必须在 `result.json` 里填 `corrections_ack`
+> （`[{"correction_id": "...", "note": "如何落实"}]`），由 `result-ingest` 机器校验。
+> 两者任一缺失都算未回执——机器只能验证 `result.json` 那一条。
 
-每次纠正必须落盘，供 N8 终检核对：
+### D. 纠偏留痕（可审计，机器强制）
+
+每次纠正必须走命令落盘，供 N8 终检核对：
 
 ```
-python state/state_utils.py node-log <Nx> --step "[纠正] <类型> <要求摘要>" --by main-agent
+python state/state_utils.py correction-add <Nx> --agent <被纠正的 agentId> \
+  --type <需求变更|前提失效|范围纠正|门禁风险|冲突消解> \
+  --finding "<主 Agent 观察到的事实与证据路径>" \
+  --requirement "<本次必须如何调整；是否需要重跑>" \
+  [--impact "<受影响的下游节点/产物>"] [--round <n>] [--delivery steered|queued|resumed_background]
 ```
-并写入 `state/reports/corrections.jsonl`（字段：`ts, agent_id, node, round, type, finding, impact, requirement, delivery`）。
-**N8 终检**：若某节点发生过纠正，则该节点必须同时存在对应 `RespondToCoordinator` 回执，否则判 `CORRECTION_UNACKED`，A3 不得 PASS。
+
+同时用 `node-log <Nx> --step "[纠正] ..." --by main-agent` 记一条时间线（便于人读）。
+
+记录落 `state/reports/corrections.jsonl`（哈希链，字段：`correction_id, ts, agent_id, node, round, type, finding, impact, requirement, delivery, prev_hash, event_hash`）。
+
+**回执**（只能由被纠正的 Agent 本人提交）：
+
+```
+python state/state_utils.py correction-ack <correction_id> --agent <同一 agentId> --note "<如何落实>"
+```
+
+落 `state/reports/correction-acks.jsonl`（同样是哈希链）。
+
+> 🔴 子 Agent 侧的强制要求：凡收到 `[纠正]` 消息，**必须在 `result.json` 里补 `corrections_ack`**：
+> ```json
+> "corrections_ack": [{"correction_id": "corr_xxxxxxxx", "note": "如何落实的",
+>                      "implemented_artifacts": ["ReportPaper/ch3.tex"]}]
+> ```
+> 这是 `result-ingest` 能机器校验的唯一回执通道（`RespondToCoordinator` 插件读不到）。
+> 字段 schema 见 `spec/result.schema.json`；未填即视为未回执，A3 判 `CORRECTION_UNACKED`。
+
+**N8 终检（A3 硬判据）**：存在未回执的纠正 → 判 `CORRECTION_UNACKED`，A3 不得 PASS；
+留痕被事后改写/删除 → 判 `CORRECTION_LEDGER_TAMPERED`，A3 同样不得 PASS。
+校验是逐条配对的：一条回执抵不了多条纠正，代签（agent_id 不一致）直接被拒。
+B1 门禁只校验**本节点**的纠正闭环（B1 在 N6/N7/N8 三处触发，不能互相顶替）。
+`result-ingest` 写 N8 completed 时也校验同一闭环，且**不受 `--skip-prereq` 放宽**（它是门禁判据本身）。
+
+查看现状：`python state/state_utils.py correction-list [--node <Nx>]`。
 
 ### E. 回收与合并
 
-1. 收到完成通知后读 `result.json`，校验 `read_skills` 覆盖 `must_load`；
-2. 校验产物哈希与 `dispatch.json` 记录一致（防空返回/伪完成，见 `EMPTY_RETURN`）；
-3. 清理 `dispatch.json`（标记 `status:"done"`），刷新节点首页与工作栏；
-4. 若有任何 `CORRECTION_UNACKED` 或门禁风险，进入审阅环节前先补齐。
+1. 收到完成通知后读 `result.json`，校验 `read_skills` 覆盖 `must_load`
+   （`result-ingest` 已机器校验：缺项时报告 `warning`，前缀写法 `academic-orchestrator:mm-x` 与 `mm-x` 等价）；
+2. 校验产物哈希与 dispatch 记录一致（防空返回/伪完成，见 `EMPTY_RETURN`）——
+   `result-ingest` 会自动复核 dispatch 里登记过的产物磁盘哈希，不一致或缺失直接拒；
+3. 清除句柄：`result-ingest` 成功即自动 `dispatch-close`；异常退出时手工
+   `python state/state_utils.py dispatch-close <agentId> --status <done|timeout|failed>`，刷新节点首页与工作栏；
+4. 若有任何 `CORRECTION_UNACKED` / `CORRECTION_LEDGER_TAMPERED` 或门禁风险，进入审阅环节前先补齐。
+
+> 中断后如何判断"做到哪 + 人还在不在 + 欠不欠账"：一条命令即可——
+> `python state/state_utils.py checkpoint-list <Nx> --latest`
+> 输出节点最新 checkpoint 的 `resumable`/`resume_hint`，并附加该节点在途 Agent 的
+> `last_activity_at` / `last_activity_source` / `last_checkpoint` / `zombie` / `unacked_corrections`。
 
 ### F. 失败与降级
 

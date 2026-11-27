@@ -291,19 +291,43 @@ SECONDARY_REVIEWER_SKILLS = {
 }
 
 
+# 主审阅者的专项必读 skill（P0-10）。与执行方 required_skills 分离：
+# 执行方要读"怎么做"的规范（mm-visualization/mm-latex-writing…），
+# 审阅方要读"怎么判"的规范。
+# 单一事实源：本表必须与各审阅 Agent 文档里 `--skills` 命令示例逐字一致
+# （reviewer.md / mm-code-reviewer.md / mm-viz-reviewer.md），
+# 否则按文档操作会被自己的门禁拒绝。
+REVIEWER_SKILLS = {
+    "N1": ["academic-orchestrator:mm-problem-analysis", "academic-orchestrator:mm-self-review"],
+    "N2": ["academic-orchestrator:mm-data-preprocessing"],
+    "N3": ["academic-orchestrator:mm-model-library"],
+    "N4": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-algorithm-dev",
+           "academic-orchestrator:code-review"],
+    "N5": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-algorithm-dev",
+           "academic-orchestrator:code-review", "academic-orchestrator:mm-model-tuning"],
+    "N6": ["academic-orchestrator:mm-visualization", "academic-orchestrator:mm-iteration-engine"],
+    "N7": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-latex-writing",
+           "academic-orchestrator:mm-self-review"],
+    "N8": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-latex-writing",
+           "academic-orchestrator:mm-self-review"],
+}
+
+
 def reviewer_required_skills(node, agent=None):
     """某审阅者在本节点必须声明的 skill 清单。
 
     2.0.0：同一节点可能有多个审阅视角——
-      - 主 reviewer：沿用节点 required_skills（它要核对执行产物与规范）；
-      - secondary reviewer（如 mm-figure-table-benchmarker）：只需它自己的专项规范，
-        不应被强制声明执行方规范（mm-visualization 等），否则角色边界混乱。
+      - 主 reviewer：用 REVIEWER_SKILLS（"怎么判"的规范），**不再**沿用执行方 required_skills；
+      - secondary reviewer（如 mm-figure-table-benchmarker）：只需它自己的专项规范。
+    P0-10：原实现对主 reviewer 返回 info["skills"]（执行方技能集），
+    导致审阅者被要求声明 mm-visualization/mm-latex-writing 等执行规范，
+    而 agent 文档里没写，按文档操作会被自己拒绝。
     """
     info = NODES[node]
     secondaries = info.get("secondary_reviewers") or []
     if agent and agent in secondaries and agent != info.get("reviewer"):
         return SECONDARY_REVIEWER_SKILLS.get(agent, [])
-    return info.get("skills", [])
+    return REVIEWER_SKILLS.get(node, info.get("skills", []))
 
 
 def require_review_skills(node, skills, agent=None):
@@ -485,10 +509,20 @@ REPORTS_INDEX = os.path.join(REPORTS_DIR, "index.json")
 
 
 def artifact_snapshot(root, node):
-    """节点产物快照哈希：文件→sha256；目录→递归文件清单哈希（相对路径排序拼接，64KB 分块）。"""
+    """节点产物快照哈希：文件→sha256；目录→递归文件清单哈希（相对路径排序拼接，64KB 分块）。
+
+    活账本目录（state/）不参与哈希：它是工作流自身的状态存储，每次 save_state 都会变，
+    若纳入快照会让"上游产物漂移"判定恒为真（N0 声明的 artifact 就含 state/）。
+    这类路径只记存在性（"present"/None），用途是校验"该目录确实建立过"。
+    """
     paths = [p.strip() for p in NODES[node].get("artifact", "").split(",") if p.strip()]
+    state_prefix = STATE_DIR + "/"
     snapshot = {}
     for p in paths:
+        norm = p.replace("\\", "/").strip("/")
+        if norm == STATE_DIR or norm.startswith(state_prefix):
+            snapshot[p] = "present" if os.path.exists(os.path.join(root, p)) else None
+            continue
         full = os.path.join(root, p)
         if os.path.isfile(full):
             snapshot[p] = sha256_of(full)
@@ -514,13 +548,35 @@ def sha256_of_bytes(data):
 # ---------------------------------------------------------------- 核心节点 MCP 必调（MCP 集成，见 mcp/call-hierarchy.md 六节点强制）
 # 核心节点（N1/N3/N4/N5/N6/N7）必须调用对应 MCP 获取外部资料支撑；迭代每轮必须重新检索、禁止纯内生输出。
 # 检索留痕（state/reports/mcp-calls.jsonl 行 · state/cases/index.json 案例/轮次引用）为审阅 PASS / 轮次评分的前置机器校验。
+#
+# 单一事实源：每个节点一条 (人类可读说明, 必含 token 组, 至少命中一组的 token 组)。
+# 说明文字只用于报错，机器判定只读两套 token 组——此前说明表与 token 表分开维护，
+# 加节点/改必调源时会只改一处，于是"报错说要 paper-mcp，实际校验查的是别的"。
 MCP_MANDATORY_NODES = {
-    "N1": "论文搜索 MCP + Tavily/tokenhub 全网搜索 MCP",
-    "N3": "Context7 MCP + 论文搜索 MCP",
-    "N4": "Context7 MCP + GitHub MCP",
-    "N5": "GitHub MCP + Tavily/tokenhub 全网搜索 MCP",
-    "N6": "论文搜索 MCP + Tavily/WebSearch（必要时 Context7）",
-    "N7": "论文搜索 MCP",
+    "N1": {
+        "desc": "论文搜索 MCP + Tavily/tokenhub 全网搜索 MCP",
+        "all": ("paper-mcp",), "any": ("tavily", "tavily-mcp", "tokenhub-tools"),
+    },
+    "N3": {
+        "desc": "Context7 MCP + 论文搜索 MCP",
+        "all": ("context7",), "any": ("paper-mcp",),
+    },
+    "N4": {
+        "desc": "Context7 MCP + GitHub MCP",
+        "all": ("context7",), "any": ("github",),
+    },
+    "N5": {
+        "desc": "GitHub MCP + Tavily/tokenhub 全网搜索 MCP",
+        "all": ("github",), "any": ("tavily", "tavily-mcp", "tokenhub-tools"),
+    },
+    "N6": {
+        "desc": "论文搜索 MCP + Tavily/WebSearch（必要时 Context7）",
+        "all": ("paper-mcp",), "any": ("tavily", "tavily-mcp", "tokenhub-tools"),
+    },
+    "N7": {
+        "desc": "论文搜索 MCP",
+        "all": ("paper-mcp",), "any": (),
+    },
 }
 MCP_CALLS_FILE = os.path.join(STATE_DIR, "reports", "mcp-calls.jsonl")
 # Deep Research 介入留痕（dr-note 命令追加；每轮迭代 SEARCH/SCORE/DECIDE 的 DR 介入可审计，N8 终检可核对）
@@ -531,16 +587,17 @@ def _mcp_tokens(value):
     return {token.strip().lower() for token in re.split(r"[,;+|]", str(value or "")) if token.strip()}
 
 
+def mcp_requirement_text(node):
+    """节点必调 MCP 的可读说明（用于报错与派发清单）。"""
+    entry = MCP_MANDATORY_NODES.get(node)
+    return entry["desc"] if isinstance(entry, dict) else str(entry or "")
+
+
 def _required_mcp_tokens(node):
-    requirements = {
-        "N1": ({"paper-mcp"}, {"tavily", "tavily-mcp", "tokenhub-tools"}),
-        "N3": ({"context7"}, {"paper-mcp"}),
-        "N4": ({"context7"}, {"github"}),
-        "N5": ({"github"}, {"tavily", "tavily-mcp", "tokenhub-tools"}),
-        "N6": ({"paper-mcp"}, {"tavily", "tavily-mcp", "tokenhub-tools"}),
-        "N7": ({"paper-mcp"}, set()),
-    }
-    return requirements.get(node, (set(), set()))
+    entry = MCP_MANDATORY_NODES.get(node)
+    if not isinstance(entry, dict):
+        return set(), set()
+    return set(entry["all"]), set(entry["any"])
 
 
 def mcp_search_evidence(root, node, round_no=None):
@@ -605,12 +662,17 @@ DATA_LINEAGE_FILE = os.path.join("Data", "data-lineage.json")
 
 
 def _log_exemption(root, kind, node, agent="-", detail=""):
-    """豁免留痕（P2-10b）：--allow-* 不再只是提前 return，而是写一条可审计记录。"""
+    """豁免留痕（P2-10b）：--allow-* 不再只是提前 return，而是写一条可审计记录。
+
+    留痕失败不阻断主流程，但**必须可见**：静默 pass 会让"豁免 0 条"
+    与"留痕功能坏了"无法区分，审计时看起来像从未豁免过。
+    """
     try:
         from state_events import record_exemption
         record_exemption(root, kind, node, agent, detail)
-    except Exception:
-        pass  # 留痕失败不阻断主流程
+    except Exception as exc:  # noqa: BLE001 - 留痕是旁路，任何失败都不该阻断业务
+        print(f"[state_utils] ⚠ 豁免留痕写入失败（不阻断）：{kind} node={node} — {exc}",
+              file=sys.stderr)
 
 
 def require_data_lineage(root, node, allow_flag=False):
@@ -692,7 +754,7 @@ def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
         return
     scope = f"node={node}" if round_no is None else f"node={node} round={round_no}"
     sys.exit(
-        f"[state_utils] 🔴 核心节点 {scope} 缺少 MCP 检索留痕（必调 {MCP_MANDATORY_NODES[node]}），禁止纯内生输出。\n"
+        f"[state_utils] 🔴 核心节点 {scope} 缺少 MCP 检索留痕（必调 {mcp_requirement_text(node)}），禁止纯内生输出。\n"
         f"  请先执行 SEARCH 重新检索并沉淀 {MCP_CALLS_FILE} 行或 state/cases/index.json 案例（case-add 登记 channel/query）；\n"
         f"  或显式传 --allow-missing-mcp 豁免（仅离线/人工特批，须在交付说明中留痕）。"
     )

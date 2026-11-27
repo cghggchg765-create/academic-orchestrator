@@ -1,4 +1,7 @@
 """MM state_utils —— 模板脚手架与项目初始化命令（init/脚手架/交接）（由 state_utils.py 拆分而来，勿手改结构；逻辑见各模块）。"""
+import importlib.util
+from pathlib import Path
+
 from state_defs import *  # noqa: F401,F403
 
 GITIGNORE = """# Python
@@ -398,7 +401,7 @@ NODE_DASHBOARD_TEMPLATE = """# 节点首页：{NODE_ID}-{NODE_NAME}
 
 
 STANDARD_DIRS = [
-    f"{STATE_DIR}/agents", f"{STATE_DIR}/cases", f"{STATE_DIR}/reviews", f"{STATE_DIR}/scopes",
+    f"{STATE_DIR}/agents", f"{STATE_DIR}/cases", f"{STATE_DIR}/reviews",
     "ProblemInfo",
     "Data/raw", "Data/processed", "Data/feature", "Data/test_result",
     "Code/utils", "Code/visualization/utils",
@@ -674,6 +677,35 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
                 if os.path.abspath(f_src) != os.path.abspath(f_tgt):
                     shutil.copyfile(f_src, f_tgt)
 
+    # P0-1：门禁登记表必须随项目分发，否则项目内 `gate-set` 找不到 registry，
+    # gate-id 白名单与 kind 约束整体失效（实测可伪造 H1/A1 PASS）。
+    shared_src = os.path.abspath(os.path.join(_module_dir, ".."))
+    contracts_src = os.path.join(shared_src, "contracts")
+    if os.path.isdir(contracts_src):
+        contracts_tgt = os.path.join(root, STATE_DIR, "contracts")
+        os.makedirs(contracts_tgt, exist_ok=True)
+        for fname in ("gates-registry.json", "gates-registry.schema.json"):
+            f_src = os.path.join(contracts_src, fname)
+            f_tgt = os.path.join(contracts_tgt, fname)
+            if os.path.isfile(f_src) and (force or sync_runtime or not os.path.exists(f_tgt)):
+                if os.path.abspath(f_src) != os.path.abspath(f_tgt):
+                    shutil.copyfile(f_src, f_tgt)
+
+    # P0-9：血缘校验器与 raw 锁定工具随项目分发，否则项目内 D1 永久 fail-closed
+    # （文档规定的调用形式 `python state/state_utils.py node-review N2` 跑不通）。
+    repo_root = os.path.abspath(os.path.join(shared_src, ".."))
+    scripts_src = os.path.join(repo_root, "scripts")
+    tools_tgt = os.path.join(root, STATE_DIR, "tools")
+    for fname in ("validate_data_lineage.py", "raw_lock.py"):
+        f_src = os.path.join(scripts_src, fname)
+        if not os.path.isfile(f_src):
+            continue
+        os.makedirs(tools_tgt, exist_ok=True)
+        f_tgt = os.path.join(tools_tgt, fname)
+        if force or sync_runtime or not os.path.exists(f_tgt):
+            if os.path.abspath(f_src) != os.path.abspath(f_tgt):
+                shutil.copyfile(f_src, f_tgt)
+
     refresh_dashboard(root)
 
     if competition.get("git"):
@@ -806,22 +838,94 @@ def cmd_init(args):
     _maybe_lock_raw(root)
 
 
+def _raw_lock_script(root=None):
+    """Locate scripts/raw_lock.py relative to this module (repo or project copy).
+
+    When running from an initialized project (``python state/state_utils.py
+    init --sync-runtime``), the tool lives in ``state/tools/raw_lock.py``
+    because ``scaffold`` distributes it there (P0-9).
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(os.path.dirname(os.path.dirname(here)), "scripts", "raw_lock.py"),
+        os.path.join(here, "scripts", "raw_lock.py"),
+    ]
+    if root:
+        candidates.append(os.path.join(root, STATE_DIR, "tools", "raw_lock.py"))
+    for candidate in candidates:
+        candidate = os.path.abspath(candidate)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _load_raw_lock_scan(root=None):
+    """Import raw_lock.scan_raw so init and the CLI share one raw-file definition.
+
+    ``scripts/raw_lock.py`` is a standalone script (not a package module), so it
+    is loaded by path with ``importlib``.  Returning ``None`` falls back to the
+    local recursive scan below, which mirrors ``scan_raw`` exactly.
+    """
+    script = _raw_lock_script(root)
+    if not script:
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("mm_raw_lock_shared", script)
+        if spec is None or spec.loader is None:
+            return None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return getattr(module, "scan_raw", None)
+    except (OSError, ImportError, SyntaxError):
+        return None
+
+
+def _scan_raw_files(root):
+    """Recursive Data/raw scan mirroring scripts/raw_lock.py::scan_raw.
+
+    Kept byte-for-byte equivalent in behavior (skip readme.txt/.gitkeep/
+    .gitignore, hidden dirs, and .pyc/.tmp/.swp) so ``init`` and the raw_lock
+    CLI never disagree about what counts as raw data.  The previous flat
+    ``os.listdir`` version missed ``Data/raw/sub/b.csv`` and skipped locking
+    entirely.
+    """
+    raw_dir = os.path.join(root, "Data", "raw")
+    found = {}
+    if not os.path.isdir(raw_dir):
+        return found
+    skip_names = {"readme.txt", ".gitkeep", ".gitignore"}
+    skip_suffix = {".pyc", ".tmp", ".swp"}
+    for dirpath, dirnames, filenames in os.walk(raw_dir):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        for filename in sorted(filenames):
+            if filename in skip_names or os.path.splitext(filename)[1].lower() in skip_suffix:
+                continue
+            full = os.path.join(dirpath, filename)
+            rel = os.path.relpath(full, root).replace(os.sep, "/")
+            found[rel] = None
+    return found
+
+
 def _maybe_lock_raw(root):
     """若 Data/raw 下有数据文件且尚无锁定基线，调用 raw_lock.py 建立基线。"""
     raw_dir = os.path.join(root, "Data", "raw")
     lock_file = os.path.join(root, "Data", "raw_lock.json")
     if not os.path.isdir(raw_dir) or os.path.exists(lock_file):
         return
-    data_files = [f for f in os.listdir(raw_dir)
-                  if os.path.isfile(os.path.join(raw_dir, f))
-                  and f not in ("readme.txt", ".gitkeep", ".gitignore")]
+    scan_raw = _load_raw_lock_scan(root)
+    if scan_raw is not None:
+        try:
+            data_files = sorted(scan_raw(Path(root)).keys())
+        except (OSError, ValueError):
+            data_files = sorted(_scan_raw_files(root))
+    else:
+        data_files = sorted(_scan_raw_files(root))
     if not data_files:
         print("[state_utils] Data/raw 暂无数据文件，跳过 raw 锁定（放入原始数据后请运行 "
               "python scripts/raw_lock.py --root <项目>）")
         return
-    here = os.path.dirname(os.path.abspath(__file__))
-    script = os.path.join(os.path.dirname(os.path.dirname(here)), "scripts", "raw_lock.py")
-    if not os.path.isfile(script):
+    script = _raw_lock_script(root)
+    if not script:
         print(f"[state_utils] ⚠ 未找到 scripts/raw_lock.py，跳过 raw 锁定（请手动建立 {lock_file}）")
         return
     try:
@@ -861,27 +965,51 @@ def _load_gate_registry():
     """读门禁登记表（shared/contracts/gates-registry.json），返回 {id: gate_obj}。
 
     运行时以注册表为准，避免"新增门禁后 gate-set 防伪出现缺口而 lint 不报"。
-    找不到注册表时退回内置集合（fail-safe，保持既有行为）。
+    P0-1：项目内副本必须先查 `state/contracts/`（init 现会分发该文件），
+    且找不到时返回 **fail-closed 内置表** 而不是空字典——空字典会让
+    gate-id 白名单与 kind 约束整体跳过（实测可伪造 H1/A1 PASS）。
     """
     here = os.path.dirname(os.path.abspath(__file__))
-    for cand in (
+    candidates = []
+    # 项目内副本优先（root 由调用方传入时会追加）
+    root_dir = os.environ.get("_MM_GATE_ROOT") or ""
+    if root_dir:
+        candidates.append(os.path.join(root_dir, STATE_DIR, "contracts", "gates-registry.json"))
+    candidates.extend([
         os.path.join(os.path.dirname(os.path.dirname(here)), "shared", "contracts", "gates-registry.json"),
         os.path.join(here, "..", "..", "contracts", "gates-registry.json"),
-    ):
+    ])
+    for cand in candidates:
         p = os.path.abspath(cand)
         if os.path.isfile(p):
             try:
                 gates = json.loads(open(p, encoding="utf-8").read()).get("gates", [])
-                return {g["id"]: g for g in gates if g.get("id")}
+                found = {g["id"]: g for g in gates if g.get("id")}
+                if found:
+                    return found
             except (OSError, json.JSONDecodeError, KeyError):
-                break
-    return {}
+                continue
+    return dict(_BUILTIN_GATES)
+
+
+# P0-1 fail-closed 内置门禁表：与 gates-registry.json 的 kind 对齐。
+# 找不到注册表时用它，保证 kind 约束仍然生效（绝不返回空字典）。
+_BUILTIN_GATES = {
+    **{g: {"id": g, "kind": "review"} for g in ("M1", "D1", "P1", "P2", "T1", "V1", "B1", "W2", "A3")},
+    **{g: {"id": g, "kind": "auto"} for g in ("A1", "A2", "W1")},
+    **{g: {"id": g, "kind": "human"} for g in ("H1", "H2", "H3")},
+}
 
 
 def cmd_gate_set(args):
     root = os.path.abspath(args.dir)
     state = load_state(root)
-    registry = _load_gate_registry()
+    # P0-1：把项目根传给 registry 加载器，优先读 state/contracts/ 下的分发副本
+    os.environ["_MM_GATE_ROOT"] = root
+    try:
+        registry = _load_gate_registry()
+    finally:
+        os.environ.pop("_MM_GATE_ROOT", None)
     # ① 合法性：gate id 必须存在于登记表（或为迭代动态门禁 S<n>-<Nx>）
     is_iteration = str(args.gate).startswith("S") and "-" in str(args.gate)
     if registry and args.gate not in registry and not is_iteration:
