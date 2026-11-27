@@ -666,8 +666,15 @@ def check_executor_evidence(root):
 
 
 def check_unreviewed_completion(root):
-    """审阅-修改循环完整性（防跳过审阅）：节点 completed 但对应门禁未通过 → 未审阅即完成。
-    合法路径只有一条：执行 → 独立审阅 → PASS 完成 / FAIL → 修改（加载对应 skill）→ 再审阅。"""
+    """审阅-修改循环完整性（防跳过审阅）：节点 completed 但门禁未通过 → 未审阅即完成。
+
+    合法路径只有一条：执行 → 独立审阅 → PASS 完成 / FAIL → 修改（加载对应 skill）→ 再审阅。
+
+    检查**节点声明的全部门禁**（NODES[nid]["gates"]），不只是 REVIEW_GATE 那一个：
+    原实现只查 REVIEW_GATE，于是 N6 的 B1、N7 的 B1/W2、N8 的 A3/W2 等在
+    "节点已 completed 但专项门禁 pending"时完全查不出来。
+    跳过 H 类（人工确认，按设计可长期 pending）与 S<n>-*（每轮动态产生）。
+    """
     state = load_json(os.path.join(root, STATE_FILE))
     if not isinstance(state, dict):
         return []
@@ -678,14 +685,19 @@ def check_unreviewed_completion(root):
             continue
         if (nodes.get(nid) or {}).get("status") != "completed":
             continue
-        gate_id = REVIEW_GATE.get(nid)
-        if not gate_id:
-            continue
-        g = gates.get(gate_id) or {}
-        if g.get("status") not in {"PASS", "auto_passed", "confirmed"}:
-            missing.append({"node": nid, "gate": gate_id, "gate_status": g.get("status", "pending"),
-                            "reason": f"节点 {nid} 已 completed 但门禁 {gate_id} 未通过"
-                                      f"（{g.get('status', 'pending')}）——疑似跳过'审阅→修改→再审阅'循环"})
+        declared = list(info.get("gates") or [])
+        rg = REVIEW_GATE.get(nid)
+        if rg and rg not in declared:
+            declared.append(rg)
+        for gate_id in declared:
+            if not gate_id or gate_id.startswith(("H", "S")):
+                continue
+            g = gates.get(gate_id) or {}
+            if g.get("status") not in {"PASS", "auto_passed", "confirmed"}:
+                missing.append({"node": nid, "gate": gate_id,
+                                "gate_status": g.get("status", "pending"),
+                                "reason": f"节点 {nid} 已 completed 但门禁 {gate_id} 未通过"
+                                          f"（{g.get('status', 'pending')}）——疑似跳过'审阅→修改→再审阅'循环"})
     return missing
 
 

@@ -117,7 +117,11 @@ RANDOM_SEED = 42
 MAIN_PY = '''"""main.py — 统一入口（占位模板）
 
 运行: python main.py --problem 1
-各题求解逻辑在 problem_1~4/pX_solver.py 中实现，本入口负责串联与输出。
+各题逻辑在 problem_N/ 下按职责分文件实现（solver/model/data/analysis 等），
+本入口只负责参数解析、调用与输出汇总，不放任何算法细节。
+
+拆分判据见 skills/mm-algorithm-dev：单文件 ≤300 行、单函数 ≤50 行。
+可用 python scripts/code_structure_audit.py --root . 自检当前结构。
 """
 import argparse
 import sys
@@ -127,7 +131,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="数学建模统一入口")
     parser.add_argument("--problem", type=int, default=1, help="题号 1-4")
     args = parser.parse_args()
-    print(f"[main.py] 占位模板: 请在 Code/problem_{args.problem} 下实现 p{args.problem}_solver.py。")
+    print(f"[main.py] 占位模板: 请在 Code/problem_{args.problem}/ 下按职责实现求解逻辑"
+          f"（如 model.py 写公式、solver.py 编排流程）。")
     sys.exit(0)
 
 

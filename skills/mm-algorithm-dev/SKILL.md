@@ -60,7 +60,7 @@ Code/                            # 代码根（标准项目结构，由 state_ut
 ├── requirements.txt             # 依赖清单
 ├── README-Code.md               # 代码运行说明、依赖版本
 │
-├── utils/                       # 跨题通用工具库（按职责分，不按题分）
+├── utils/                       # 跨题通用工具库（按职责分，不按题分；下列为常见示例，用到才建）
 │   ├── __init__.py
 │   ├── data_io.py               # 数据读写（从 Data/raw/ 读，处理后写 Data/processed/）
 │   ├── preprocess.py            # 数据清洗与特征工程
@@ -77,7 +77,7 @@ Code/                            # 代码根（标准项目结构，由 state_ut
 │
 ├── visualization/               # 可视化模块（输出到 output/figures/）
 │   ├── __init__.py
-│   └── plot_base.py             # 绘图基础设置（中文 SimHei / 300dpi / 配色）
+│   └── plot_base.py             # 绘图基础设置（中文 SimHei / 300dpi / 配色）；出图时才建
 │
 └── output/                      # 🔴 唯一输出口（运行表格/图片/文本/模型只写此目录）
     ├── tables/                  # 输出表格 csv/excel

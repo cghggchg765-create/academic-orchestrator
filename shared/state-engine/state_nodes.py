@@ -249,9 +249,11 @@ SCAFFOLD_TEMPLATES = {
     # N1 产物同样是脚手架预建占位
     "probleminfo/problemnotes.md": ("待 N1 选题拆解后填写", "产物占位"),
     "probleminfo/keyrequirements.md": ("产物占位",),
-    # N4 代码骨架：stub 里带 NotImplementedError 说明，视为未实现
-    "code/main.py": ("占位模板", "NotImplementedError"),
-    "code/config.py": ("占位模板", "TODO"),
+    # N4 代码骨架：只把 main.py 里那句"占位模板: 请在 Code/problem_"当占位标志。
+    # 这是模板独有的整句，用户实现后自然删掉；不用泛词"占位模板"（docstring 里也有）。
+    # config.py 不列入：它的内容（路径常量 + 种子）用户"填完"后与模板几乎一致，
+    # 任何基于文本的判据都会误报——代码是否有产出交给 code_structure_audit.py 判。
+    "code/main.py": ("占位模板: 请在 Code/problem_",),
 }
 # 代码骨架占位：problem_N/*.py 与 visualization/*.py 里的 stub 标记
 CODE_STUB_MARKERS = ("NotImplementedError", "TODO: implement")

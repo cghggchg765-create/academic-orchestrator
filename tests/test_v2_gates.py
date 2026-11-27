@@ -1144,3 +1144,40 @@ class CodeScaffoldNoShellTest(Base):
         self.assertNotEqual(r.returncode, 0, "有结构缺陷时 --strict 应退出码非 0")
         for keyword in ("300", "空壳", "版本后缀"):
             self.assertIn(keyword, r.stdout, f"应报出 {keyword} 相关问题，实际: {r.stdout[:400]}")
+
+    def test_audit_does_not_flag_defensive_raise_as_shell(self):
+        """含 raise ValueError 的防御性代码是真实实现，不得判空壳。
+
+        回归用：_is_shell 曾把所有 `raise` 都当占位标志，
+        于是"带参数校验的小模块"被误报为空壳，作者被迫删掉校验才能过审。
+        """
+        code = self.project / "Code"
+        (code / "problem_1" / "guard.py").write_text(
+            "def check(x):\n"
+            "    if x < 0:\n"
+            '        raise ValueError("x must be >= 0")\n'
+            "    return x\n", encoding="utf-8")
+        audit = ROOT / "scripts" / "code_structure_audit.py"
+        r = run(audit, "--root", self.project, "--json", check=False)
+        report = json.loads(r.stdout)
+        shells = [f["path"] for f in report["fails"] if f["kind"] == "empty_shell"]
+        self.assertNotIn("problem_1/guard.py", shells,
+                         f"raise ValueError 不应被判空壳，实际失败项: {shells}")
+
+    def test_audit_excludes_docstring_from_line_count(self):
+        """docstring 不计入 300/50 行阈值，否则"文档写得详细"反被判超长。"""
+        code = self.project / "Code"
+        doc_heavy = ('"""\n' + "文档行\n" * 100 + '"""\n'
+                     "def documented():\n"
+                     '    """\n' + "    函数说明\n" * 50 + '    """\n'
+                     "    return 1\n")
+        (code / "problem_1" / "documented.py").write_text(doc_heavy, encoding="utf-8")
+        audit = ROOT / "scripts" / "code_structure_audit.py"
+        r = run(audit, "--root", self.project, "--json", check=False)
+        report = json.loads(r.stdout)
+        long_files = [f["path"] for f in report["fails"] if f["kind"] == "file_too_long"]
+        long_funcs = [f["path"] for f in report["fails"] if f["kind"] == "function_too_long"]
+        self.assertNotIn("problem_1/documented.py", long_files,
+                         "100 行 docstring 不应计入文件行数")
+        self.assertNotIn("problem_1/documented.py", long_funcs,
+                         "50 行 docstring 不应计入函数行数")

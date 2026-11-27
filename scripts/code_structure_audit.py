@@ -57,20 +57,81 @@ def _is_comment_or_blank(line: str) -> bool:
 
 
 def count_code_lines(text: str) -> int:
-    """物理行数扣除空行与整行注释（保留行内代码与 docstring —— 保守口径）。"""
-    return sum(1 for line in text.splitlines() if not _is_comment_or_blank(line))
+    """有效代码行数：扣除空行、整行注释、以及模块/函数级 docstring 行。
+
+    为什么不按物理行：一份 300 行的模块若含 100 行 API 文档字符串，
+    按物理行判定会误报超限，逼作者删文档——那与"可维护"目标相反。
+    这里用 AST 定位 docstring 精确扣除，而不是猜引号位置。
+    """
+    lines = text.splitlines()
+    total = len(lines)
+    skip = [False] * (total + 2)  # 1-based → 留一点余量
+
+    for idx, line in enumerate(lines, start=1):
+        s = line.strip()
+        if not s or s.startswith("#"):
+            skip[idx] = True
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        # 解析失败时退化为物理口径（调用方随后会报 syntax_error）
+        return sum(1 for line in lines if not _is_comment_or_blank(line))
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        body = getattr(node, "body", None) or []
+        if not body:
+            continue
+        first = body[0]
+        if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)):
+            start = getattr(first, "lineno", 0)
+            end = getattr(first, "end_lineno", start)
+            for i in range(start, end + 1):
+                if i < len(skip):
+                    skip[i] = True
+
+    return sum(1 for i in range(1, total + 1) if not skip[i])
 
 
 def _function_span(node: ast.AST) -> int:
-    """函数体行数：end_lineno - lineno + 1（含签名与 docstring）。"""
+    """函数体行数：end_lineno - lineno + 1，扣除函数自身的 docstring 行。
+
+    与文件口径一致：写详细 docstring 不该被判"函数过长"。
+    嵌套函数内部的 docstring 不扣（那是主体的一部分），只扣本函数首个 docstring。
+    """
     end = getattr(node, "end_lineno", None) or getattr(node, "lineno", 0)
-    return end - node.lineno + 1
+    span = end - node.lineno + 1
+    body = getattr(node, "body", None) or []
+    if body:
+        first = body[0]
+        if (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)):
+            ds_start = getattr(first, "lineno", 0)
+            ds_end = getattr(first, "end_lineno", ds_start)
+            span -= max(0, ds_end - ds_start + 1)
+    return max(span, 1)
+
+
+def _raises_not_implemented(node: ast.Raise) -> bool:
+    """该 raise 抛的是否为 NotImplementedError（占位标志）。"""
+    exc = node.exc
+    if isinstance(exc, ast.Call):
+        exc = exc.func
+    if isinstance(exc, ast.Name):
+        return exc.id == "NotImplementedError"
+    if isinstance(exc, ast.Attribute):
+        return exc.attr == "NotImplementedError"
+    return False
 
 
 def _is_shell(tree: ast.Module) -> bool:
-    """判断文件是否为空壳：除 import / pass / docstring 外没有任何逻辑。
+    """判断文件是否为空壳：除 import / pass / docstring / NotImplementedError 外无逻辑。
 
-    raise NotImplementedError 也算空壳（那是占位模板的标志）。
+    只把 NotImplementedError 视为占位标志。`raise ValueError(...)` 这类是真实的
+    参数校验代码，不能当空壳——否则会误报所有带防御性检查的小模块。
     """
     for node in tree.body:
         if isinstance(node, SHELL_STATEMENT_TYPES):
@@ -83,24 +144,18 @@ def _is_shell(tree: ast.Module) -> bool:
                 continue
             return False
         if isinstance(node, ast.Raise):
-            # raise NotImplementedError(...) 单独出现 = 占位
-            exc = node.exc
-            name = ""
-            if isinstance(exc, ast.Call):
-                exc = exc.func
-            if isinstance(exc, ast.Name):
-                name = exc.id
-            elif isinstance(exc, ast.Attribute):
-                name = exc.attr
-            if name == "NotImplementedError":
+            # 裸 raise NotImplementedError(...) 单独出现 = 占位
+            if _raises_not_implemented(node):
                 continue
             return False
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            # 只有"整体 raise NotImplementedError"的函数才算空壳
+            # 只有"body 全是 NotImplementedError"的函数才算空壳；
+            # 含 raise ValueError / raise RuntimeError 的函数是真实代码。
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 body = [b for b in node.body
                         if not (isinstance(b, ast.Expr) and isinstance(b.value, ast.Constant))]
-                if body and all(isinstance(b, ast.Raise) for b in body):
+                if body and all(isinstance(b, ast.Raise) and _raises_not_implemented(b)
+                                for b in body):
                     continue
             return False
         return False
