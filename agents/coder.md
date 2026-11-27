@@ -95,8 +95,8 @@ maxTurns: 50
 |------|------|------|
 | 全局配置 | `config.py` | 超参数、求解器参数、路径配置（禁止业务代码硬编码） |
 | 通用工具 | `utils/data_io.py` `preprocess.py` `metrics.py` `logger.py` `model_utils.py` | 数据读写、预处理、指标、日志、模型存取 |
-| 分题求解 | `problem_1~4/pX_solver.py` + `pX_analysis.py` + `pX_param.py` | 每问一模块：求解、结果分析、专属参数 |
-| 可视化 | `visualization/vis_p1~4.py` + `utils/plot_base.py` | 出图辅助（图片统一写 `output/figures`） |
+| 分题求解 | `problem_1~4/` 下按职责分文件：`solver.py`（编排）/ `model.py`（公式）/ `data.py`（本问数据装配）/ `analysis.py`（误差与敏感性） | 目录表达题号，文件名表达职责；**单文件 ≤300 行、单函数 ≤50 行**，超限必须拆；禁止空壳与版本副本 |
+| 可视化 | `visualization/plot_base.py` + 按需出图脚本 | 出图辅助（图片统一写 `output/figures`） |
 | 主入口 | `main.py` | 统一入口，串联分题模块，输出只落 `output/` |
 
 **简单模型**可合并 problem 模块；**复杂模型**保持分题模块分离。输出铁律：**所有运行产物（表格/图片/文本/模型）只写 `Code/output/`（唯一输出口）**。
@@ -193,9 +193,9 @@ Code/
 ├── main.py             # 统一入口，串联分题模块
 ├── requirements.txt    # 依赖列表（含版本号）
 ├── README-Code.md      # 代码运行说明、依赖版本
-├── utils/              # 通用工具库（data_io/preprocess/metrics/logger/model_utils）
-├── problem_1~4/        # 分题求解模块（pX_solver/pX_analysis/pX_param）
-├── visualization/      # 可视化模块（vis_p1~4 + utils/plot_base.py）
+├── utils/              # 跨题通用工具库（data_io/preprocess/metrics/logger/model_utils）
+├── problem_1~4/        # 分题隔离；内部按职责分文件（solver/model/data/analysis），不预建空壳
+├── visualization/      # 可视化模块（plot_base.py + 按需的出图脚本）
 └── output/             # 🔴 唯一输出口：tables/ figures/ txt_result/ model_save/
 ```
 
@@ -659,7 +659,10 @@ if (user) { if (user.isActive) { doWork(user); } }
 1. Phase 0: 读 state 状态与 N4 首页 → 写 claim → 检查 formula.md/DataLog.md 前置
    → 加载 skill("mm-algorithm-dev") + skill("mm-iteration-engine")
    → 搜索优秀案例（websearch/paper-mcp）→ case-add 沉淀 → 确定 case_refs
-2. Phase 1: 设计模块（config.py / utils/ / problem_1/p1_solver.py / main.py，输出只落 output/）
+2. Phase 1: 设计模块（config.py / utils/ / problem_1/ 下按职责分文件 / main.py，输出只落 output/）
+   - 🔴 拆分先于实现：**先按 mm-algorithm-dev 的"职责槽位 + 300 行阈值"规划文件边界**，再动手写；
+     不要沿用"一个 solver 文件装下整问"的旧结构——那是超长代码的直接来源。
+   - 只创建真正有内容要放的文件；没内容的模块不要预建空壳。
 3. Phase 2: 实现代码，核心函数注释引用公式编号（如 对应公式 (3.1)）
 4. Phase 3: python main.py --problem 1 运行，记录运行时间/求解状态/目标函数值（写 output/txt_result/）
 5. Phase 4: 逐条核对公式编号覆盖、目标函数、约束、符号映射

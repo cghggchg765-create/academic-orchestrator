@@ -61,6 +61,30 @@ skill("mm-model-tuning")       # 仅审 N5 调优产物时加读（基线/超参
 | robustness 鲁棒性 | 0.20 | 无边界处理 | 仅正常路径 | seed=42，参数集中 config，防零防溢出 | 异常路径有处理 | 边界/极端/异常全覆盖有测试 |
 | innovation 创新性 | 0.20 | 无案例依据的平庸实现 | 案例未说明出处 | 案例有出处（case_refs），方法适配 | 有改进点+对比证明 | 改进有消融实验证明贡献 |
 
+### 可读性维度的客观锚点（先跑机器审计，再给分）
+
+可读性不是主观印象。评分前必须执行：
+
+```bash
+python scripts/code_structure_audit.py --root <项目根> --json
+```
+
+把结果映射到分数（**硬规则，不接受"我读着还行"**）：
+
+| 审计结果 | readability 上限 |
+|---|---|
+| 有 `file_too_long`（单文件 > 300 行代码） | ≤ 5 |
+| 有 `function_too_long`（单函数 > 50 行） | ≤ 5 |
+| 有 `empty_shell`（空壳文件） | ≤ 4 |
+| 有 `version_copy`（`_v2`/`_old`/`_backup` 副本） | ≤ 3（违反单一版本纪律） |
+| 有 `syntax_error` | 直接 P1，不得 PASS |
+| 仅 `role_overlap` / `version_dir` 告警 | ≤ 7 |
+| 零 FAIL 零 WARN | 才可按 8-10 区间评分 |
+
+判据来源：`skills/mm-algorithm-dev/SKILL.md` 的"拆分的判断标准"。
+如果作者声称"不拆分有理由"（如单一算法长实现），理由必须写在 `Code/README-Code.md`
+的"结构决策"小节，否则按上表硬扣。
+
 ### Phase 3.5: 性能与实现时间核对清单（效率维度证据规则）
 
 | # | 检查项 | 判定 |

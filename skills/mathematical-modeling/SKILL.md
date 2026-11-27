@@ -249,7 +249,7 @@ Phase 8: [07 产物 + 全部产物] → reviewer → N8 审阅记录 + Submissio
 | 题目拆解 | `ProblemInfo/ProblemNotes.md` + `KeyRequirements.md` | Markdown | 目标/约束/数据清单、题型判定、评分点映射 |
 | 数据报告 | `Data/DataLog.md` + 数据文件 | Markdown + 附表 | 数据概览、缺失分析、异常值处理、特征清单、来源 |
 | 模型文档 | `ModelDocs/model-framework.md`+`formula.md`+`assumption.md` | Markdown | 模型框架、公式推导（连续编号）、假设清单（有依据） |
-| 代码 | `Code/` | Python 工程 | `config.py`/`main.py`/`utils/`/`problem_1~4/`/`requirements.txt`/`README-Code.md`；输出只落 `output/` |
+| 代码 | `Code/` | Python 工程 | `config.py`/`main.py`/`utils/`/`problem_1~4/`/`requirements.txt`/`README-Code.md`；输出只落 `output/`；`problem_N/` 内按职责分文件（solver/model/data/analysis），单文件 ≤300 行、单函数 ≤50 行，禁止空壳与版本副本 |
 | 调优报告 | `ModelDocs/sensitivity-analysis.md`+`error-analysis.md`+`model-validation.md` | Markdown | 基线指标、超参对比、敏感性分析、鲁棒性结论 |
 | 图表 | `Code/output/figures` → `ResultFigures/`（精选）+ `figure-list.md` | PDF/PNG（≥300dpi） | 图1~图N 连续编号、每图含标注（标题/单位/来源/图例） |
 | 论文 | `ReportPaper/LaTeX/` | LaTeX 源码 | `main.tex`+`preamble.tex`+`sections/`+`ref.bib`，符合国赛格式 |

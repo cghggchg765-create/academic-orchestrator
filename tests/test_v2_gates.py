@@ -26,6 +26,7 @@ def run(*args, cwd=None, check=True, env=None):
                           capture_output=True, check=check, cwd=cwd, env=env)
 
 
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="mm_gate_"))
@@ -1096,3 +1097,50 @@ class CorrectionAuditSummaryTest(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CodeScaffoldNoShellTest(Base):
+    """脚手架不得预建空壳 .py（回归用）。
+
+    回归背景：原 init 无条件给 4 个问题各建 pX_solver/pX_analysis/pX_param
+    三个空壳（共 12 个）+ 4 个 vis_p*.py + 5 个 utils 空模板。后果：
+      ① 目录结构被固定文件名锁死，无法按工程职责拆分；
+      ② 空壳诱导把所有逻辑塞进那个"已存在"的 solver 文件 → 单文件膨胀到上千行；
+      ③ 没做的题留下永久噪音。
+    现在只建目录，文件由 coder 按 mm-algorithm-dev 的职责槽位 + 300 行阈值决定。
+    """
+
+    def test_init_does_not_create_shell_modules(self):
+        """Base.setUp 已完成 init，此处直接检查其产物。"""
+        code = self.project / "Code"
+        shells = ("p1_solver.py", "p1_analysis.py", "p1_param.py",
+                  "p2_solver.py", "p3_solver.py", "p4_solver.py",
+                  "vis_p1.py", "vis_p2.py", "vis_p3.py", "vis_p4.py",
+                  "data_io.py", "preprocess.py", "metrics.py", "logger.py",
+                  "model_utils.py", "plot_base.py")
+        found = [name for name in shells if list(code.rglob(name))]
+        self.assertEqual(found, [], f"init 不应预建空壳模块，实际生成: {found}")
+
+    def test_init_keeps_directories_and_entrypoints(self):
+        """去空壳不等于去结构：目录与真正的入口文件必须还在。"""
+        code = self.project / "Code"
+        for rel in ("main.py", "config.py", "requirements.txt", "README-Code.md",
+                    "utils/__init__.py"):
+            self.assertTrue((code / rel).exists(), f"应保留 {rel}")
+        for n in (1, 2, 3, 4):
+            self.assertTrue((code / f"problem_{n}").is_dir(), f"应保留 problem_{n}/ 目录")
+
+    def test_structure_audit_flags_long_files_and_shells(self):
+        """审计脚本对超长文件/空壳/版本副本必须真的报错（非空壳检查）。"""
+        code = self.project / "Code"
+        (code / "problem_1" / "big.py").write_text(
+            "def f():\n" + "    x = 1\n" * 340 + "    return x\n", encoding="utf-8")
+        (code / "problem_1" / "shell.py").write_text(
+            '"""占位"""\n\ndef solve():\n    raise NotImplementedError("todo")\n', encoding="utf-8")
+        (code / "problem_1" / "solver_v2.py").write_text(
+            "def solve():\n    return 1\n", encoding="utf-8")
+        audit = ROOT / "scripts" / "code_structure_audit.py"
+        r = run(audit, "--root", self.project, "--strict", check=False)
+        self.assertNotEqual(r.returncode, 0, "有结构缺陷时 --strict 应退出码非 0")
+        for keyword in ("300", "空壳", "版本后缀"):
+            self.assertIn(keyword, r.stdout, f"应报出 {keyword} 相关问题，实际: {r.stdout[:400]}")

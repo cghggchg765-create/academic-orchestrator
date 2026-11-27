@@ -474,14 +474,12 @@ def standard_files_content(name="", year="", problem="", language="zh"):
         "Code/requirements.txt": REQUIREMENTS,
         "Code/README-Code.md": "# README-Code（代码运行说明、依赖版本）\n\n🔴 运行前必须创建并激活虚拟环境:\n  Windows: python -m venv .venv && .venv\\\\Scripts\\\\activate\n  Linux/macOS: python3 -m venv .venv && source .venv/bin/activate\n安装依赖: pip install -r requirements.txt\n运行: `python main.py --problem 1`（输出只落 output/）\n",
         "Code/utils/__init__.py": "",
-        "Code/utils/data_io.py": UTIL_TPL.format(name="data_io", desc="数据读写"),
-        "Code/utils/preprocess.py": UTIL_TPL.format(name="preprocess", desc="预处理"),
-        "Code/utils/metrics.py": UTIL_TPL.format(name="metrics", desc="指标计算"),
-        "Code/utils/logger.py": UTIL_TPL.format(name="logger", desc="日志"),
-        "Code/utils/model_utils.py": UTIL_TPL.format(name="model_utils", desc="模型通用工具、保存加载"),
+        # utils/ 下不预建空壳模块（data_io/preprocess/metrics/logger/model_utils）：
+        # "禁止空壳"必须一贯到底——只给分题去掉空壳、共享工具仍留 5 个空模板，
+        # 等于换个地方继续制造噪音。实际需要哪个模块由 coder 在用到时创建，
+        # 目录已存在，创建是零成本的。
         "Code/visualization/__init__.py": "",
         "Code/visualization/utils/__init__.py": "",
-        "Code/visualization/utils/plot_base.py": UTIL_TPL.format(name="plot_base", desc="绘图基础设置（中文/300dpi/配色）"),
         "ResultFigures/figure-list.md": FIGURE_LIST,
         "ReportPaper/LaTeX/main.tex": LATEX_MAIN,
         "ReportPaper/LaTeX/frontmatter/commitment.tex": "% 承诺书占位页（正式提交前由队伍按当年模板填写）\n\\thispagestyle{empty}\\begin{center}承诺书\\end{center}\n",
@@ -525,18 +523,14 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
         full = os.path.join(root, path)
         if force or not os.path.exists(full):
             save_text_atomic(full, text)
+    # 分题目录只建目录，不预建空壳 .py。
+    # 原实现无条件给 4 问各建 pX_solver/pX_analysis/pX_param 三个空壳（共 12 个），
+    # 结果是：① 结构被固定文件名锁死，无法按工程职责拆分；② 空壳诱导把所有逻辑塞进
+    # 那个"已经存在"的 solver 文件 → 单文件膨胀到上千行；③ 没做的题留下永久噪音。
+    # 现在只保证目录存在，具体文件由 coder 按 mm-algorithm-dev 的"职责槽位 + 300 行阈值"决定。
     for q in range(1, 5):
-        pdir = os.path.join(root, f"Code/problem_{q}")
-        os.makedirs(pdir, exist_ok=True)
-        for fn, desc in (("__init__.py", ""), (f"p{q}_solver.py", f"第 {q} 问核心求解代码"),
-                         (f"p{q}_analysis.py", f"第 {q} 问结果分析、误差分析"), (f"p{q}_param.py", f"第 {q} 问专属参数配置")):
-            full = os.path.join(pdir, fn)
-            if force or not os.path.exists(full):
-                save_text_atomic(full, solver_placeholder(fn.replace(".py", ""), desc) if fn != "__init__.py" else "")
-    for q in range(1, 5):
-        full = os.path.join(root, f"Code/visualization/vis_p{q}.py")
-        if force or not os.path.exists(full):
-            save_text_atomic(full, solver_placeholder(f"vis_p{q}", f"第 {q} 问可视化（输出到 output/figures）"))
+        os.makedirs(os.path.join(root, f"Code/problem_{q}"), exist_ok=True)
+    os.makedirs(os.path.join(root, "Code/visualization"), exist_ok=True)
     # .gitkeep 目录清单从 STANDARD_DIRS 派生（单一事实源，禁止另写一份目录清单导致重复目录）
     gitkeep_dirs = [d for d in STANDARD_DIRS if d.endswith(("raw", "tables", "figures", "txt_result", "model_save",
                                                              "schematic", "curve", "heatmap", "comparison",

@@ -216,15 +216,11 @@ EXISTING_EXTS = {
 SCAFFOLD_FILES = {
     "README-项目总说明.md",
     "Code/main.py", "Code/config.py", "Code/requirements.txt", "Code/README-Code.md",
-    "Code/utils/__init__.py", "Code/utils/data_io.py", "Code/utils/preprocess.py",
-    "Code/utils/metrics.py", "Code/utils/logger.py", "Code/utils/model_utils.py",
+    "Code/utils/__init__.py",
     "Code/visualization/__init__.py", "Code/visualization/utils/__init__.py",
-    "Code/visualization/utils/plot_base.py", "Code/visualization/vis_p1.py",
-    "Code/visualization/vis_p2.py", "Code/visualization/vis_p3.py", "Code/visualization/vis_p4.py",
-    "Code/problem_1/__init__.py", "Code/problem_1/p1_solver.py", "Code/problem_1/p1_analysis.py", "Code/problem_1/p1_param.py",
-    "Code/problem_2/__init__.py", "Code/problem_2/p2_solver.py", "Code/problem_2/p2_analysis.py", "Code/problem_2/p2_param.py",
-    "Code/problem_3/__init__.py", "Code/problem_3/p3_solver.py", "Code/problem_3/p3_analysis.py", "Code/problem_3/p3_param.py",
-    "Code/problem_4/__init__.py", "Code/problem_4/p4_solver.py", "Code/problem_4/p4_analysis.py", "Code/problem_4/p4_param.py",
+    # 分题目录与 utils/ 下都不再预建空壳 .py（见 state_scaffold 的注释）：
+    # 因此 Code/ 下任何业务 .py 都是用户真实代码，不得列入占位清单，
+    # 否则"已有真实实现"会被误判成"只有脚手架占位"。
     "Data/raw/readme.txt", "Data/DataLog.md",
     "Material/training_notes.md", "Material/contest_experience.md",
     "ModelDocs/model-framework.md", "ModelDocs/formula.md", "ModelDocs/assumption.md",

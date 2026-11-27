@@ -185,7 +185,8 @@ metadata:
 **Phase 4 — 算法代码开发（→ coder，迭代环）**
 - 委托 coder 将模型转化为可运行代码，按 mm-iteration-engine 迭代循环执行（SEARCH→IMPLEMENT→RUN→COMMIT→SCORE→DECIDE）
 - 提供 `ModelDocs/formula.md` + `Data/DataLog.md` 作为输入
-- 要求输出：`Code/`（config.py + main.py + utils/ + problem_1~4/ + requirements.txt + README-Code.md，输出只落 output/）
+- 要求输出：`Code/`（config.py + main.py + utils/ + problem_1~4/ + requirements.txt + README-Code.md，输出只落 output/）；
+  `problem_N/` 内部按职责分文件（solver/model/data/analysis），**单文件 ≤300 行、单函数 ≤50 行**，禁止空壳与版本副本
 - Checkpoint：代码无报错运行
 - Checkpoint：结果数值合理（与预期量级一致）
 - Checkpoint：代码注释含公式编号引用（与 formula.md 对应）

@@ -66,8 +66,8 @@ MathModel_Contest/
 ├── Data/                    # raw（禁改）/ processed / feature / test_result + DataLog.md（dataprep 产物）
 ├── Code/                    # config.py + main.py（统一入口）+ requirements.txt + README-Code.md
 │   ├── utils/（data_io/preprocess/metrics/logger/model_utils）
-│   ├── problem_1~4/（pX_solver/pX_analysis/pX_param）
-│   ├── visualization/（vis_p1~4 + utils/plot_base.py）
+│   ├── problem_1~4/（按职责分文件：solver/model/data/analysis；单文件≤300行、单函数≤50行）
+│   ├── visualization/（plot_base.py + 按需出图脚本）
 │   └── output/                 # 【唯一输出口】tables/ figures/ txt_result/ model_save/（runs 日志亦在此）
 ├── ResultFigures/          # 论文级统一图库（visualization 从 output 精选入库，去冗余）
 │   ├── schematic/ curve/ heatmap/ comparison/ + figure-list.md（编号/用途/对应论文章节）

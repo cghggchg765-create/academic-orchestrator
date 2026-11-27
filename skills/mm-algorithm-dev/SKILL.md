@@ -60,24 +60,24 @@ Code/                            # 代码根（标准项目结构，由 state_ut
 ├── requirements.txt             # 依赖清单
 ├── README-Code.md               # 代码运行说明、依赖版本
 │
-├── utils/                       # 通用工具库
+├── utils/                       # 跨题通用工具库（按职责分，不按题分）
 │   ├── __init__.py
 │   ├── data_io.py               # 数据读写（从 Data/raw/ 读，处理后写 Data/processed/）
 │   ├── preprocess.py            # 数据清洗与特征工程
 │   ├── metrics.py               # 指标计算
-│   ├── logger.py                # 日志
-│   └── model_utils.py           # 模型通用工具（保存/加载/交叉验证）
+│   └── logger.py                # 日志
 │
-├── problem_1~4/                 # 分题求解模块（每问独立可运行）
+├── problem_1~4/                 # 分题隔离（每问独立可运行；内部按职责再分层）
 │   ├── __init__.py
-│   ├── pX_solver.py             # 核心求解代码（注释引用 ModelDocs/formula.md 公式编号）
-│   ├── pX_analysis.py           # 结果分析、误差分析
-│   └── pX_param.py              # 单题专属参数配置
+│   ├── solver.py                # 编排入口：串起本问的求解步骤，只做流程，不放算法细节
+│   ├── model.py                 # 数学模型：目标函数/约束/递推式等（对应 formula.md 公式编号）
+│   ├── data.py                  # 本问专属的数据装配与特征构造（跨题通用的放 utils/）
+│   ├── analysis.py              # 结果分析、误差分析、敏感性
+│   └── validation.py            # 本问的校验（可复现性、边界、量纲）——有校验才写
 │
 ├── visualization/               # 可视化模块（输出到 output/figures/）
 │   ├── __init__.py
-│   ├── vis_p1~4.py
-│   └── utils/plot_base.py       # 绘图基础设置（中文 SimHei / 300dpi / 配色）
+│   └── plot_base.py             # 绘图基础设置（中文 SimHei / 300dpi / 配色）
 │
 └── output/                      # 🔴 唯一输出口（运行表格/图片/文本/模型只写此目录）
     ├── tables/                  # 输出表格 csv/excel
@@ -86,7 +86,29 @@ Code/                            # 代码根（标准项目结构，由 state_ut
     └── model_save/              # 训练好的模型权重/文件
 ```
 
-> **铁律**：① 代码只写 `Code/output/`（唯一输出口）；② 论文级图片由 visualization agent 精选到 `ResultFigures/`；③ `Data/raw/` 原始数据只读不修改；④ **文件名禁止纯数字**（如 `000.png`、`main_v000.pdf`、`01.csv`），一律语义命名（`fig1_results.png`、`p1_solver.py`）；⑤ 运行前必须建 venv（见下）。
+### 🔴 拆分的判断标准（不是固定文件名，而是工程职责）
+
+**上面的 `solver/model/data/analysis` 是"职责槽位"，不是必须全部存在的空文件。**
+文件该不该存在、该拆到多细，按下面三条客观标准判断，而不是照抄模板：
+
+| 触发条件 | 必须做的动作 |
+|---|---|
+| 单文件 > **300 行**，或单函数 > **50 行** | 拆。按"一个文件一个职责"切开（如把求解拆成 `objective.py`/`constraints.py`/`algorithm.py`） |
+| 单函数嵌套 > **3 层**，或有 > 4 个参数 | 拆函数 + 抽数据类/命名元组承载参数 |
+| 同一段逻辑在 **2 处以上**重复 | 抽到 `utils/` 或本问的私有模块，不留副本 |
+| 一个文件里出现 **2 个以上不相关领域概念**（如同时做数据清洗+画图+求解） | 拆。这是"职责混乱"最可靠的信号 |
+
+**拆分铁律**：
+
+1. **禁止空壳文件**：不为"以后可能用到"预建 `validation.py` / `analysis.py`。没有实质内容就不创建——空文件既是噪音，也会诱使后续把所有东西都塞进去。
+2. **拆分必须保持可运行**：每次拆分后 `python Code/main.py --problem N` 必须仍能跑通并产出同样结果；拆完不跑等于没拆。
+3. **拆出的文件要有明确入口**：每个模块暴露少量公开函数，内部实现用 `_` 前缀标记私有，避免"到处都能调"的隐式耦合。
+4. **单文件行数上限 300 行是硬线**：超过就必须拆或写明理由（如"单一算法长实现，拆分反而降低可读性"），理由入 `Code/README-Code.md` 的"结构决策"小节。
+5. **禁止版本共存**：改代码就地在原文件改，不留 `solver_v2.py` / `solver_old.py` / `solver_new.py`。版本追溯交给 git。
+
+**命名的唯一要求**：文件名表达"这个文件负责什么"，不表达"这是第几版"或"这是第几问"（题号已由所在目录表达）。所以是 `problem_1/algorithm.py` 而不是 `p1_solver.py`——目录已说明是第 1 问，文件名只需说明职责。
+
+> **铁律**：① 代码只写 `Code/output/`（唯一输出口）；② 论文级图片由 visualization agent 精选到 `ResultFigures/`；③ `Data/raw/` 原始数据只读不修改；④ **文件名禁止纯数字**（如 `000.png`、`main_v000.pdf`），一律语义命名（`fig1_results.png`、`algorithm.py`）；⑤ 运行前必须建 venv（见下）；⑥ 单文件 ≤300 行、单函数 ≤50 行、禁止空壳与版本副本。
 
 ---
 
