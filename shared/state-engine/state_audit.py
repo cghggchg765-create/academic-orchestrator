@@ -386,11 +386,31 @@ def cmd_result_ingest(args):
     if result["status"] in {"blocked", "escalated", "repair_pending", "review_pending"}:
         state["nodes"][node]["status"] = result["status"]
     elif result["status"] == "completed":
+        # A3 判据的第二道执行点：N8 终审完成必须证明纠正留痕已闭环。
+        # 与"上游守卫"不同，这是**门禁判据本身**而不是前置条件，不随 --skip-prereq 放宽
+        # （否则交一份 completed result.json 就能绕过 node-review 的 CORRECTION_UNACKED）。
+        # 放在交付物完整性守卫**之前**：两者都该拒绝时，应报出的是门禁判据错误
+        # （CORRECTION_UNACKED）而不是 checkpoint 缺失——后者只是执行规范问题，
+        # 先报它会让"N8 绕过纠正闭环"从错误信息里完全不可见。
+        if node == "N8":
+            closure_errors = _n8_correction_closure_errors(root)
+            if closure_errors:
+                sys.exit("[state_utils] 拒绝 result-ingest N8 completed（纠正留痕闭环未通过）：\n  - "
+                         + "\n  - ".join(closure_errors))
         # 2.0.0（P0-4）：result-ingest 曾是完整门禁旁路（无 checkpoint/产物/门禁/血缘校验）。
         # 现在与 node-finish / round-decide 走同一套完成守卫。
+        # --skip-prereq 只豁免前置（未开工/上游/门禁），交付物完整性照查——
+        # 与 round-decide 同口径，防止测试开关顺带放行空壳（语义混载）。
         if getattr(args, "skip_prereq", False):
             state.setdefault("meta", {}).setdefault("prereq_skips", []).append(
                 {"at": now_iso(), "node": node, "reason": "result-ingest --skip-prereq（测试/迁移）"})
+            # skip 只豁免前置；交付物照查（与 round-decide 同口径）
+            from state_nodes import require_node_deliverables
+            require_node_deliverables(
+                root, node,
+                allow_empty=getattr(args, "allow_empty_artifacts", False),
+                allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
+            )
         else:
             from state_guard import require_completion_allowed
             require_completion_allowed(
@@ -398,14 +418,6 @@ def cmd_result_ingest(args):
                 allow_empty=getattr(args, "allow_empty_artifacts", False),
                 allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
             )
-        # A3 判据的第二道执行点：N8 终审完成必须证明纠正留痕已闭环。
-        # 与"上游守卫"不同，这是**门禁判据本身**而不是前置条件，不随 --skip-prereq 放宽
-        # （否则交一份 completed result.json 就能绕过 node-review 的 CORRECTION_UNACKED）。
-        if node == "N8":
-            closure_errors = _n8_correction_closure_errors(root)
-            if closure_errors:
-                sys.exit("[state_utils] 拒绝 result-ingest N8 completed（纠正留痕闭环未通过）：\n  - "
-                         + "\n  - ".join(closure_errors))
         state["nodes"][node]["status"] = "completed"
         state["stages"][NODES[node]["stage"]]["status"] = "completed"
         state["stages"][NODES[node]["stage"]]["completed_at"] = now_iso()
@@ -542,16 +554,43 @@ def plan_migration(root):
         oldp, newp = os.path.join(root, old), os.path.join(root, new)
         if os.path.exists(oldp) and not os.path.exists(newp):
             actions.append(f"重命名文件 {old} -> {new}")
-    # 目录级迁移：旧目录有内容就搬过去（不覆盖同名），搬空后删除空壳
+    # 目录级迁移：旧目录有内容就搬过去（不覆盖同名），搬空后删除空壳；
+    # 空壳（连占位都没有）也计划删除，否则永远留在项目里
     for old, new in LEGACY_DIR_MOVES.items():
         oldp = os.path.join(root, old)
         if os.path.isdir(oldp) and os.listdir(oldp):
             actions.append(f"迁移旧目录 {old} -> {new}")
+        elif os.path.isdir(oldp):
+            actions.append(f"删除空目录 {old}")
     for d in LEGACY_EMPTY_DIRS:
         oldp = os.path.join(root, d)
         if os.path.isdir(oldp) and not os.listdir(oldp):
             actions.append(f"删除空目录 {d}")
     return actions
+
+
+def _relock_external_refs(root):
+    """目录迁移把文件搬进 External/refs/ 后重建锁定基线。
+
+    迁移落进只读引用区的文件不在 refs.lock.json 里的话，check 会把它们全部
+    判成"未经 add 就放进引用区"（TAMPERED）——升级自愈反而制造基线漂移。
+    """
+    mod = None
+    try:
+        import state_isolation  # 同目录门禁接入层，仓库与项目内副本都在
+        mod = state_isolation.load_iso_module(root)
+    except Exception:
+        mod = None
+    if mod is not None:
+        try:
+            from pathlib import Path
+            mod.cmd_lock(Path(root))
+            return
+        except Exception:
+            pass
+    print("[state_utils] ⚠ 迁移文件已进入 External/refs/，但锁定基线未能自动重建；"
+          "请运行 python scripts/external_isolation.py lock --root . 完成锁定。",
+          file=sys.stderr)
 
 
 def apply_migration(root, actions):
@@ -590,17 +629,41 @@ def apply_migration(root, actions):
             old = os.path.join(root, parts[0].split(" ", 1)[1])
             new = os.path.join(root, parts[1])
             if os.path.isdir(old):
+                moved, skipped = 0, []
                 for dirpath, _, filenames in os.walk(old):
                     rel = os.path.relpath(dirpath, old)
                     for f in filenames:
+                        if f.lower() == ".gitkeep":
+                            # 占位标记不是资料：不迁移（新目标已有自己的占位），随旧壳消失
+                            continue
                         src = os.path.join(dirpath, f)
                         dst = os.path.join(new, "" if rel == "." else rel, f)
-                        if not os.path.exists(dst):
-                            os.makedirs(os.path.dirname(dst), exist_ok=True)
-                            shutil.move(src, dst)
-                for dirpath, dirnames, filenames in os.walk(old, topdown=False):
-                    if not dirnames and not filenames:
+                        if os.path.exists(dst):
+                            # 同名冲突：留在旧目录并明确告知（静默跳过 = 用户不知道数据在哪）
+                            skipped.append(os.path.relpath(src, root))
+                            continue
+                        os.makedirs(os.path.dirname(dst), exist_ok=True)
+                        shutil.move(src, dst)
+                        moved += 1
+                # 自底向上清壳：以磁盘实况为准（walk 的 dirnames 快照在删除子目录后会失真，
+                # 旧实现"if not dirnames"会因陈旧快照漏删含空子目录的父壳）。
+                for dirpath, _, _ in os.walk(old, topdown=False):
+                    for name in os.listdir(dirpath):
+                        if name.lower() == ".gitkeep":
+                            os.remove(os.path.join(dirpath, name))
+                    if not os.listdir(dirpath):
                         os.rmdir(dirpath)
+                if skipped:
+                    print(f"[state_utils] ⚠ {len(skipped)} 个文件因目标同名未迁移，仍留在 "
+                          f"{parts[0].split(' ', 1)[1]}：")
+                    for s in skipped[:10]:
+                        print(f"  - {s}")
+                    if len(skipped) > 10:
+                        print(f"  …（另有 {len(skipped) - 10} 个）")
+                    print("  请人工比对合并后删除旧目录；或重命名目标文件后重跑 upgrade-heal。")
+                # 搬进只读引用区的文件必须进入锁定基线，否则 check 判 TAMPERED
+                if moved and parts[1].replace("\\", "/").startswith("External/refs"):
+                    _relock_external_refs(root)
         elif action.startswith("重命名文件"):
             parts = action.split(" -> ")
             old = os.path.join(root, parts[0].split(" ", 1)[1])
@@ -609,7 +672,7 @@ def apply_migration(root, actions):
                 os.makedirs(os.path.dirname(new), exist_ok=True)
                 os.rename(old, new)
         elif action.startswith("删除空目录"):
-            d = os.path.join(root, action.split(" ", 2)[2])
+            d = os.path.join(root, action.split(" ", 1)[1])
             if os.path.isdir(d) and not os.listdir(d):
                 os.rmdir(d)
     # 迁移后修复 JSON/文档中的旧引用（旧状态目录名 -> 新目录名）

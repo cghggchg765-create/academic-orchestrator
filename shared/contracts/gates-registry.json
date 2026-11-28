@@ -11,7 +11,11 @@
       "criterion": "审题完整性：问题覆盖、隐性约束≥3 条有推导、题型判定≥3 条依据、各维度≥150 字",
       "producer": "reviewer",
       "artifact": "state/nodes/选题拆解/dashboard.md",
-      "thresholds": { "implicit_constraints_min": 3, "type_evidence_min": 3, "section_chars_min": 150 }
+      "thresholds": {
+        "implicit_constraints_min": 3,
+        "type_evidence_min": 3,
+        "section_chars_min": 150
+      }
     },
     {
       "id": "D1",
@@ -22,7 +26,11 @@
       "criterion": "CSV 可读、缺失报告完整、来源可追溯、数据量达标（行数≥指标列数×3）；且数据血缘链完整：raw→processed→feature→test_result 每级都有 sha256、行数/列数、变换脚本与参数记录，raw 哈希与登记值一致（未被篡改）",
       "producer": "reviewer",
       "artifact": "state/nodes/数据处理/dashboard.md + Data/DataLog.md#数据血缘",
-      "thresholds": { "rows_per_column_min": 3, "lineage_levels": 4, "require_raw_hash": true }
+      "thresholds": {
+        "rows_per_column_min": 3,
+        "lineage_levels": 4,
+        "require_raw_hash": true
+      }
     },
     {
       "id": "P1",
@@ -45,16 +53,6 @@
       "artifact": "state/agents/mm-code-reviewer/result.json"
     },
     {
-      "id": "A1",
-      "node": "N4",
-      "timing": "N4 轮次评分达标时",
-      "kind": "auto",
-      "blocking": "hard_stop",
-      "criterion": "代码反模式扫描 0 个 High 命中",
-      "producer": "round-score",
-      "artifact": "state/decision_log.json#gates.A1"
-    },
-    {
       "id": "T1",
       "node": "N5",
       "timing": "N5 完成后",
@@ -63,7 +61,10 @@
       "criterion": "基线已跑、超参对比≥3 组、敏感性覆盖关键参数、鲁棒性≥2 方法",
       "producer": "mm-code-reviewer",
       "artifact": "state/agents/mm-code-reviewer/result.json",
-      "thresholds": { "tuning_grid_min": 3, "robustness_methods_min": 2 }
+      "thresholds": {
+        "tuning_grid_min": 3,
+        "robustness_methods_min": 2
+      }
     },
     {
       "id": "V1",
@@ -74,7 +75,10 @@
       "criterion": "20 项图表规范核对：图号连续、中文无乱码、≥300dpi、每图有标注、数据同源、坐标轴范围与正文一致等",
       "producer": "mm-viz-reviewer",
       "artifact": "state/agents/mm-viz-reviewer/result.json",
-      "thresholds": { "dpi_min": 300, "checklist_items": 20 }
+      "thresholds": {
+        "dpi_min": 300,
+        "checklist_items": 20
+      }
     },
     {
       "id": "B1",
@@ -85,7 +89,10 @@
       "criterion": "图表与表格的文献对标：七维（列完备、统计量、单位、可比性、分组、图型、学术表达）逐维有证据；对标≥3 篇同领域论文；无 GAP_MAJOR",
       "producer": "mm-figure-table-benchmarker",
       "artifact": "state/reports/figure-table-benchmark/",
-      "thresholds": { "peer_papers_min": 3, "dimensions": 7 }
+      "thresholds": {
+        "peer_papers_min": 3,
+        "dimensions": 7
+      }
     },
     {
       "id": "W1",
@@ -97,16 +104,6 @@
       "producer": "node-start"
     },
     {
-      "id": "A2",
-      "node": "N7",
-      "timing": "N7 轮次评分达标时",
-      "kind": "auto",
-      "blocking": "hard_stop",
-      "criterion": "写作反模式扫描通过、摘要≥4 个数字、无套话黑名单命中",
-      "producer": "round-score",
-      "thresholds": { "abstract_numbers_min": 4 }
-    },
-    {
       "id": "W2",
       "node": "N7",
       "timing": "N7 完成后",
@@ -115,7 +112,11 @@
       "criterion": "论文五维评分≥6.0（入门门禁）",
       "producer": "reviewer",
       "artifact": "state/agents/reviewer/result.json",
-      "thresholds": { "entry_score": 6.0, "pass_score": 6.5, "target_score": 7.5 }
+      "thresholds": {
+        "entry_score": 6.0,
+        "pass_score": 6.5,
+        "target_score": 7.5
+      }
     },
     {
       "id": "A3",
@@ -161,7 +162,12 @@
   "iteration_gates": {
     "_comment": "迭代动态门禁 S<n>-<节点> 不静态登记，运行时由 round-score 创建。",
     "pattern": "S<n>-<node>",
-    "nodes": ["N4", "N5", "N7", "N8"],
+    "nodes": [
+      "N4",
+      "N5",
+      "N7",
+      "N8"
+    ],
     "producer": "round-score"
   }
 }

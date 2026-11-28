@@ -194,6 +194,35 @@ class DimensionSplitTest(unittest.TestCase):
         self.assertIn("reviewer", contrib)
         self.assertEqual(contrib["reviewer"]["dimensions"]["readability"], 8)
 
+    def test_split_reviewer_rejects_invalid_dims(self):
+        """分工提交的 dims 必须是非空对象、键在分工内、值为 0-10 的数。"""
+        for dims in ("{}", '["readability"]', '{"readability": "good"}', '{"readability": 99}'):
+            r = self.run_state("round-score", "N4", "--round", "1", "--dims", dims,
+                               "--judge", "reviewer", "--skills-read", "mm-self-review",
+                               "--evidence", "Code/main.py", "--allow-missing-mcp", check=False)
+            self.assertNotEqual(r.returncode, 0, f"dims={dims} 应被拒绝，实际被记录")
+
+    def test_split_agent_cannot_write_node_gate(self):
+        """分工审阅者不得通过 node-review 写主门禁（P2 归主审阅者落盘）。"""
+        r = self.run_state("node-review", "N4", "--agent", "reviewer", "--result", "PASS",
+                           "--skills", "mm-self-review", "--evidence", "Code/main.py",
+                           check=False)
+        self.assertNotEqual(r.returncode, 0, "分工审阅者做 node-review 应被拒绝")
+        self.assertIn("维度分工审阅者", r.stderr)
+        doc = json.loads((self.proj / "state" / "decision_log.json").read_text(encoding="utf-8"))
+        self.assertEqual((doc["gates"].get("P2") or {}).get("status"), "pending",
+                         "P2 不得被分工审阅者写掉")
+
+    def test_round_decide_warns_missing_split_dims(self):
+        """主审阅者漏掉分工维度且无 contribution 时，round-decide 必须提示。"""
+        self.run_state("round-score", "N4", "--round", "1", "--total", "7",
+                       "--dims", '{"correctness":8,"efficiency":7,"robustness":7}',
+                       "--judge", "mm-code-reviewer", "--skills-read", self.MAIN_SKILLS,
+                       "--evidence", "Code/main.py", "--allow-missing-mcp")
+        r = self.run_state("round-decide", "N4", "--round", "1", check=False)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("维度分工", r.stderr, "应在 stderr 提示分工维度未评分")
+
     def test_main_reviewer_can_still_score_whole(self):
         """分工不阻塞主审阅者的整体评分路径。"""
         r = self.run_state("round-score", "N4", "--round", "1", "--total", "8",
@@ -246,6 +275,37 @@ class CapabilityKeywordCoverageTest(unittest.TestCase):
         self.assertGreaterEqual(score["score"], policy["min_score"],
                                 f"nature-writing 得分 {score['score']} 低于阈值 "
                                 f"{policy['min_score']}，会被过滤")
+
+
+class PluginCacheVersionOrderTest(unittest.TestCase):
+    """插件缓存多版本共存时必须解析语义版本最高的副本。
+
+    纯字典序会把 1.10.0 排在 2.0.0 之前（'1' < '2'）：插件跨大版本升级后，
+    旧缓存副本会把新版"遮蔽"——用户改新版 skill 永远不生效。
+    """
+
+    def test_newest_version_wins(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "skill_context_probe", ROOT / "scripts" / "skill_context.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        tmp = Path(tempfile.mkdtemp(prefix="mm_cache_"))
+        try:
+            cache = tmp / "cache"
+            for ver in ("1.10.0", "1.9.0", "2.0.0"):
+                sk = cache / "mk" / "plug" / ver / "skills" / "some-skill"
+                sk.mkdir(parents=True)
+                (sk / "SKILL.md").write_text(
+                    f"---\nname: some-skill\ndescription: v{ver}\n---\n\nbody\n",
+                    encoding="utf-8")
+            mod.PLUGIN_CACHE = cache
+            cache_roots = mod._plugin_cache_roots()
+            self.assertEqual(len(cache_roots), 1, f"同一插件多版本只应取最高版: {cache_roots}")
+            self.assertEqual(cache_roots[0], cache / "mk" / "plug" / "2.0.0" / "skills",
+                             f"应选语义版本最高的 2.0.0，实际: {cache_roots[0]}")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class TaxonomyStalenessTest(unittest.TestCase):

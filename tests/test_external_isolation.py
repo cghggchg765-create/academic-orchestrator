@@ -201,6 +201,89 @@ class IsolationFlowTest(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("External/refs", r.stderr)
 
+    def test_derive_exemption_is_per_ref(self):
+        """登记的是 ref A，抄的是 ref B → 必须仍判 HIGH（登记一次≠对全部外部文件免疫）。"""
+        peer_a = self.peer_file(name="peer_a.py")
+        self.iso("add", str(peer_a))
+        peer_b = self.peer_file(name="peer_b.py")
+        peer_b.write_text("\n".join(f"other_line_{i} = {i} + 7  # different origin"
+                                    for i in range(20)), encoding="utf-8")
+        self.iso("add", str(peer_b))
+        target = self.project / "Code" / "problem_1" / "model.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("\n".join(f"other_line_{i} = {i} + 7  # different origin"
+                                    for i in range(20)), encoding="utf-8")
+        self.iso("derive", "--ref", "External/refs/peer_a.py",
+                 "--target", "Code/problem_1/model.py", "--note", "登记的是 A")
+        r = self.iso("scan", "--json", check=False)
+        rep = json.loads(r.stdout)
+        highs = [f for f in rep["findings"] if f["severity"] == "HIGH"]
+        self.assertTrue(highs, f"抄未登记的 peer_b 必须判 HIGH: {rep['findings']}")
+
+    def test_derived_target_survives_iteration(self):
+        """登记后正常迭代（target 内容重写、路径不变）不阻断扫描——路径豁免保留。"""
+        peer = self.peer_file()
+        self.iso("add", str(peer))
+        target = self.project / "Code" / "problem_1" / "model.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(PEER_LONG, encoding="utf-8")
+        self.iso("derive", "--ref", "External/refs/peer_solution.py",
+                 "--target", "Code/problem_1/model.py", "--note", "参考重写")
+        # 合法迭代：改写 target（保留大段重合）
+        target.write_text(PEER_LONG + "\n\ndef extra():\n    return 42\n", encoding="utf-8")
+        r = self.iso("scan", "--json", check=False)
+        rep = json.loads(r.stdout)
+        self.assertNotIn("HIGH", [f["severity"] for f in rep["findings"]],
+                         f"登记后迭代不得被判 HIGH: {rep['findings']}")
+
+    def test_threshold_out_of_range_rejected(self):
+        """--threshold <=0 会把 0% 重合也判 HIGH，>1 会静默关闭检测——都必须拒绝。"""
+        for th in ("0", "-0.5", "1.1"):
+            r = self.iso("scan", "--json", "--threshold", th, check=False)
+            self.assertNotEqual(r.returncode, 0, f"threshold={th} 应被拒绝")
+            self.assertIn("(0, 1]", r.stderr)
+
+    def test_binary_figures_not_text_compared(self):
+        """.tif/.gif 等二进制不参与文本比对（读成乱码既浪费也无意义）。"""
+        bin_dir = self.tmp / "bins"
+        bin_dir.mkdir(exist_ok=True)
+        (bin_dir / "peer_fig.tif").write_bytes(bytes(range(256)) * 3)
+        self.iso("add", str(bin_dir / "peer_fig.tif"))
+        figs = self.project / "ResultFigures"
+        figs.mkdir(exist_ok=True)
+        (figs / "our_fig.tif").write_bytes(bytes(range(255, -1, -1)) * 3)
+        (figs / "our_anim.gif").write_bytes(b"GIF89a" + bytes(range(256)) * 3)
+        r = self.iso("scan", "--json")
+        rep = json.loads(r.stdout)
+        touched = [f for f in rep["findings"] if f["path"].endswith((".tif", ".gif"))]
+        self.assertEqual(touched, [], f"二进制不应产生内容比对发现: {rep['findings']}")
+
+
+class FailClosedScopeTest(unittest.TestCase):
+    """fail-closed 只应在 refs 里确有外部资料时触发。
+
+    init 自带的 README.md / .gitkeep / 空 papers、templates 子目录不是外部资料；
+    把它们当成"已引入外部资料"会让零资料的项目在检测器缺失时被误拒。
+    """
+
+    def test_refs_has_material_ignores_scaffold(self):
+        sys.path.insert(0, str(ROOT / "shared" / "state-engine"))
+        import state_isolation as si
+        tmp = Path(tempfile.mkdtemp(prefix="mm_fc_scope_"))
+        try:
+            refs = tmp / "External" / "refs"
+            refs.mkdir(parents=True)
+            self.assertFalse(si._refs_has_material(str(tmp)))
+            (refs / "README.md").write_text("rules", encoding="utf-8")
+            (refs / "papers").mkdir()
+            (refs / "papers" / ".gitkeep").write_text("", encoding="utf-8")
+            self.assertFalse(si._refs_has_material(str(tmp)),
+                             "README/.gitkeep/空目录不算外部资料")
+            (refs / "papers" / "peer.py").write_text("x = 1\n", encoding="utf-8")
+            self.assertTrue(si._refs_has_material(str(tmp)))
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

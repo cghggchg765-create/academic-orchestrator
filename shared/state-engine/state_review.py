@@ -193,17 +193,45 @@ def require_b1_evidence(root, node, agent, evidence):
                      f"要求 ≥3 篇同领域论文。")
 
 
+def reject_dimension_split_agent(node, agent):
+    """维度分工审阅者不得执行节点门禁审阅（node-review/auto-check）。
+
+    DIMENSION_SPLIT 的分工 agent（如 N4 的 reviewer）只通过 round-score 提交
+    自己分工维度的分数（dimension_contributions），整体判定仍归主审阅者。
+    此前 expected_reviewers 为 round-score 纳入分工 agent 后，node-review 也随之放行，
+    于是分工 agent 只声明 mm-self-review 就能把主门禁（P2/T1）写成 PASS——
+    恰好复现了分工要防的"单一视角替全节点背书"。
+    """
+    split = DIMENSION_SPLIT.get(node) or {}
+    split_agent = split.get("agent")
+    main_reviewer = NODES[node].get("reviewer")
+    if not split_agent or agent != split_agent or split_agent == main_reviewer:
+        return
+    sys.exit(
+        f"[state_utils] 拒绝：{agent} 是 {node} 的维度分工审阅者（只评 "
+        f"{sorted(split.get('dimensions') or [])}），不落节点门禁。\n"
+        f"  节点门禁由主审阅者 {main_reviewer} 通过 node-review 落盘；\n"
+        f"  {agent} 的分工维度分请提交：\n"
+        f"    python state/state_utils.py round-score {node} --round <n> "
+        f"--dims '<仅分工维度JSON>' --judge {agent} --skills-read <分工skill>"
+    )
+
+
 def cmd_node_review(args):
     root = os.path.abspath(args.dir)
     require_node(args.node)
     state = load_state(root)
     node = args.node
     info = NODES[node]
+    reject_dimension_split_agent(node, args.agent)
     require_independent_reviewer(node, args.agent)
     require_review_skills(node, args.skills, agent=args.agent, project=root)
     # 防审阅偷懒：FAIL/BLOCKED 必须附证据路径（evidence）
-    # 核心节点 MCP 必调（N1/N3/N4/N5/N7）：PASS 审阅前校验检索留痕，禁止纯内生输出
-    if args.result == "PASS":
+    # 核心节点 MCP 必调（N1/N3/N4/N5/N7）：PASS 审阅前校验检索留痕，禁止纯内生输出。
+    # 迭代节点（N4/N5/N7）在此跳过：它们的 MCP 留痕由 round-score **按轮**强制
+    # （round_no=None 的节点级校验与按轮校验语义重叠——任一轮有留痕前者必过），
+    # N1/N3 是该检查的唯一执行点，保留。
+    if args.result == "PASS" and node not in PROFILE_OF:
         require_mcp_search_evidence(root, node, round_no=None,
                                     allow_flag=getattr(args, "allow_missing_mcp", False))
         # N2 数据血缘强制（2.0.0）：D1 放行前必须能交叉检验处理内容/过程/结果
@@ -277,6 +305,7 @@ def cmd_auto_check(args):
     if gate not in {"H1", "H2", "H3"}:
         sys.exit(f"[state_utils] --gate 必须是 H1/H2/H3，实际 {gate}")
     # 核查 Agent 必须是该节点配对审阅 Agent（自动核查 = 独立 Agent 受托执行）
+    reject_dimension_split_agent(node, args.agent)
     require_independent_reviewer(node, args.agent)
     require_review_skills(node, args.skills, agent=args.agent, project=root)
     summary = args.summary or "自动核查通过"

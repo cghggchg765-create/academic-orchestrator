@@ -1,64 +1,223 @@
 {
   "_schema": "2.0",
   "_comment": "=== mm-iteration-engine 状态统一节点 (schema 2.0) === 每次竞赛项目一份，由 orchestrator 单写，子 Agent 只写 state/agents/<id>/result.json。状态文件让流水线可在中断后恢复。以 state_utils.py 的 init 输出为准；动态门禁键 S<轮次>-<节点>（如 S1-N4）由 round-score 创建。",
-
   "competition": {
     "name": "",
     "year": "",
     "problem": "",
     "language": "zh"
   },
-
   "stages": {
-    "0_init":          { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "1_analysis":      { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "2_data":          { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "3_modeling":      { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "4_solving":       { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {}, "random_seed": null },
-    "5_tuning":        { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "6_visualization": { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "7_writing":       { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {} },
-    "8_review":        { "status": "pending", "completed_at": null, "artifacts": [], "decisions": {}, "final_score": null, "passed": false }
+    "0_init": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "1_analysis": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "2_data": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "3_modeling": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "4_solving": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {},
+      "random_seed": null
+    },
+    "5_tuning": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "6_visualization": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "7_writing": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {}
+    },
+    "8_review": {
+      "status": "pending",
+      "completed_at": null,
+      "artifacts": [],
+      "decisions": {},
+      "final_score": null,
+      "passed": false
+    }
   },
-
   "nodes": {
-    "N0": { "name": "需求确认",     "status": "pending", "homepage": "state/nodes/需求确认/dashboard.md", "goal": "" },
-    "N1": { "name": "选题拆解",     "status": "pending", "homepage": "state/nodes/选题拆解/dashboard.md", "goal": "" },
-    "N2": { "name": "数据处理",     "status": "pending", "homepage": "state/nodes/数据处理/dashboard.md", "goal": "" },
-    "N3": { "name": "建模",         "status": "pending", "homepage": "state/nodes/建模/dashboard.md",     "goal": "" },
-    "N4": { "name": "代码/代码迭代", "status": "pending", "homepage": "state/nodes/代码/dashboard.md",     "goal": "" },
-    "N5": { "name": "调优",         "status": "pending", "homepage": "state/nodes/调优/dashboard.md",     "goal": "" },
-    "N6": { "name": "图表",         "status": "pending", "homepage": "state/nodes/图表/dashboard.md",     "goal": "" },
-    "N7": { "name": "论文/论文修改", "status": "pending", "homepage": "state/nodes/论文/dashboard.md",     "goal": "" },
-    "N8": { "name": "评审",         "status": "pending", "homepage": "state/nodes/评审/dashboard.md",     "goal": "" }
+    "N0": {
+      "name": "需求确认",
+      "status": "pending",
+      "homepage": "state/nodes/需求确认/dashboard.md",
+      "goal": ""
+    },
+    "N1": {
+      "name": "选题拆解",
+      "status": "pending",
+      "homepage": "state/nodes/选题拆解/dashboard.md",
+      "goal": ""
+    },
+    "N2": {
+      "name": "数据处理",
+      "status": "pending",
+      "homepage": "state/nodes/数据处理/dashboard.md",
+      "goal": ""
+    },
+    "N3": {
+      "name": "建模",
+      "status": "pending",
+      "homepage": "state/nodes/建模/dashboard.md",
+      "goal": ""
+    },
+    "N4": {
+      "name": "代码/代码迭代",
+      "status": "pending",
+      "homepage": "state/nodes/代码/dashboard.md",
+      "goal": ""
+    },
+    "N5": {
+      "name": "调优",
+      "status": "pending",
+      "homepage": "state/nodes/调优/dashboard.md",
+      "goal": ""
+    },
+    "N6": {
+      "name": "图表",
+      "status": "pending",
+      "homepage": "state/nodes/图表/dashboard.md",
+      "goal": ""
+    },
+    "N7": {
+      "name": "论文/论文修改",
+      "status": "pending",
+      "homepage": "state/nodes/论文/dashboard.md",
+      "goal": ""
+    },
+    "N8": {
+      "name": "评审",
+      "status": "pending",
+      "homepage": "state/nodes/评审/dashboard.md",
+      "goal": ""
+    }
   },
-
   "gates": {
-    "M1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "D1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "P1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "P2": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "A1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "T1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "V1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "W1": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "A2": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "W2": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "A3": { "status": "pending", "agent": null, "timestamp": null, "result": null },
-    "H1": { "status": "pending", "note": null },
-    "H2": { "status": "pending", "note": null },
-    "H3": { "status": "pending", "note": null }
+    "M1": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "D1": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "P1": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "P2": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "T1": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "V1": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "W1": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "W2": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "A3": {
+      "status": "pending",
+      "agent": null,
+      "timestamp": null,
+      "result": null
+    },
+    "H1": {
+      "status": "pending",
+      "note": null
+    },
+    "H2": {
+      "status": "pending",
+      "note": null
+    },
+    "H3": {
+      "status": "pending",
+      "note": null
+    }
   },
-
   "rounds": [],
-
   "decisions": [],
-
   "termination": {
-    "code":  { "pass": 7.0, "target": 8.0, "max_rounds": 5, "plateau": { "window": 2, "epsilon": 0.3 }, "budget": { "deadline": null } },
-    "paper": { "pass": 6.5, "target": 7.5, "max_rounds": 4, "plateau": { "window": 2, "epsilon": 0.3 }, "budget": { "deadline": null } }
+    "code": {
+      "pass": 7.0,
+      "target": 8.0,
+      "max_rounds": 5,
+      "plateau": {
+        "window": 2,
+        "epsilon": 0.3
+      },
+      "budget": {
+        "deadline": null
+      }
+    },
+    "paper": {
+      "pass": 6.5,
+      "target": 7.5,
+      "max_rounds": 4,
+      "plateau": {
+        "window": 2,
+        "epsilon": 0.3
+      },
+      "budget": {
+        "deadline": null
+      }
+    }
   },
-
   "meta": {
     "created_at": "",
     "updated_at": "",

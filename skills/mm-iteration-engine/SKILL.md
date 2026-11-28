@@ -128,8 +128,8 @@ MathModel_Contest/
   "nodes": { "N0": {"name":"需求确认","status":"pending","homepage":"state/nodes/需求确认/dashboard.md","goal":""}, "..." },
   "gates": {
     "M1": {"status":"pending","agent":null,"timestamp":null,"result":null},
-    "D1": {}, "P1": {}, "P2": {}, "A1": {}, "T1": {}, "V1": {},
-    "W1": {}, "A2": {}, "W2": {}, "A3": {},
+    "D1": {}, "P1": {}, "P2": {}, "T1": {}, "V1": {},
+    "W1": {}, "W2": {}, "A3": {},
     "H1": {"status":"pending","note":null}, "H2": {"status":"pending","note":null}, "H3": {"status":"pending","note":null}
   },
   "rounds": [],
@@ -326,7 +326,7 @@ python state/state_utils.py review-loop <Nx> --dir .
   "reviewer": "mm-code-reviewer",
   "review_mode": "code-score",
   "required_skills": ["mm-iteration-engine", "mm-algorithm-dev", "code-review"],
-  "gates": ["P2", "A1", "H2"],
+  "gates": ["P2", "H2"],
   "artifact_dir": "Code/",
   "homepage": "state/nodes/代码/dashboard.md",
   "upstream": ["N3"]

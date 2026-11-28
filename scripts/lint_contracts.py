@@ -334,6 +334,28 @@ def check_dispatch_agent_names() -> None:
                       f"（agents/ 下没有 {bare}.md）——照抄会派发失败并回退通用 Agent")
 
 
+def check_isolation_readme_parity() -> None:
+    """隔离区 README 有两个写入方（scaffold 与 external_isolation.py），必须内容同步。
+
+    脚本分发到项目后须自包含（state/tools/ 里独立运行），无法 import scaffold 的常量，
+    因此两边各有一份文本。这里不要求逐字相同，但关键命令与规则必须两边都在——
+    否则用户在 init 后与手动 init 脚本两种路径看到的规则不一致。
+    """
+    required_markers = ("external_isolation.py add", "check", "derive", "scan",
+                        "只读", "External/refs")
+    scaffold = (ROOT / "shared" / "state-engine" / "state_scaffold.py").read_text(
+        encoding="utf-8", errors="replace")
+    script = (ROOT / "scripts" / "external_isolation.py").read_text(
+        encoding="utf-8", errors="replace")
+    for label, text in (("state_scaffold.EXTERNAL_README", scaffold),
+                        ("scripts/external_isolation.py", script)):
+        for marker in required_markers:
+            if marker not in text:
+                error(f"{label} 缺少隔离区 README 关键内容 `{marker}`——"
+                      f"两个写入方的文本漂移了，请同步（scaffold 的 EXTERNAL_README "
+                      f"与脚本 cmd_init 的 readme.write_text）")
+
+
 def check_naming_redlines() -> None:
     """命名红线（回归防护）：状态目录必须为 state；标准文件名不允许下划线或数字前缀。
     只检查"文件名/路径形态"的旧名（带后缀或作为目录段），不检查裸单词，
@@ -853,6 +875,7 @@ def main() -> int:
     check_documented_counts()
     check_documented_commands_exist()
     check_dispatch_agent_names()
+    check_isolation_readme_parity()
     check_no_big_archives_tracked()
     check_naming_redlines()
     check_plugin_manifest()

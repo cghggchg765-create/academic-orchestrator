@@ -80,9 +80,11 @@ class WorkflowContractsTest(unittest.TestCase):
         argv = list(args)
         # 本文件用例验证状态机流转，不验证产物产出；空产物校验由 test_workflow_gates 的
         # 专门用例覆盖。故对 node-finish 统一补豁免，避免用例被迫造假产物。
-        if argv and argv[0] in ("node-finish", "round-decide"):
+        if argv and argv[0] in ("node-finish", "round-decide", "result-ingest"):
             # 本文件用例验证状态机流转，不验证产物/归档产出；
             # 空产物与无快照校验由 tests/test_v2_gates.py 专门覆盖。
+            # （--skip-prereq 语义拆分后只豁免前置；写 completed 的三条路径
+            #   现在无论是否带豁免都查交付物，故统一在此补交付物豁免。）
             if "--allow-empty-artifacts" not in argv:
                 argv.append("--allow-empty-artifacts")
             if "--allow-no-checkpoint" not in argv:
@@ -898,7 +900,11 @@ class WorkflowContractsTest(unittest.TestCase):
                        "--dir", str(self.project))
 
     def test_aux_gates_auto_pass(self):
-        """门禁落盘路径闭环：N4 达标 → A1 自动 PASS；N7 开工且 V1 已过 → W1 自动 PASS。"""
+        """门禁落盘路径闭环（A1/A2 别名门禁已删：S 门禁即唯一轮次门禁，W1 自动落盘保留）。
+
+        链路：N4 达标收敛 → P2 由 node-review 落 → N5 同环 → N6 全门禁（含 B1）
+        → N7 开工时 W1 自动 PASS。
+        """
         self.lock_problem()
         self.complete_n0()
         for n in ("N1", "N2", "N3"):
@@ -911,7 +917,7 @@ class WorkflowContractsTest(unittest.TestCase):
                            "--skills", {"N1": "academic-orchestrator:mm-problem-analysis,academic-orchestrator:mm-self-review",
                                         "N2": "academic-orchestrator:mm-data-preprocessing", "N3": "academic-orchestrator:mm-model-library"}[n],
                            "--summary", "ok", "--allow-missing-lineage", "--dir", str(self.project))
-        # N4 round-score 达标 → A1 自动 PASS
+        # N4 收敛（round-score 达标 → round-decide early_stop）→ node-review 落 P2
         self.run_state("round-start", "N4", "--dir", str(self.project))
         self.run_state("round-score", "N4", "--round", "1", "--total", "8", "--judge", "mm-code-reviewer",
                        "--skills-read", "academic-orchestrator:mm-iteration-engine,academic-orchestrator:mm-algorithm-dev,academic-orchestrator:code-review",
@@ -919,7 +925,7 @@ class WorkflowContractsTest(unittest.TestCase):
                        "--dims", '{"correctness":8,"efficiency":8,"readability":8,"robustness":8,"innovation":8}',
                        "--dir", str(self.project))
         state = json.loads((self.project / "state" / "decision_log.json").read_text(encoding="utf-8"))
-        self.assertEqual(state["gates"]["A1"]["status"], "PASS")
+        self.assertNotIn("A1", state["gates"], "A1 别名门禁应已删除")
         # 推 N4 到 completed（round-decide early_stop）+ N5 + N6（含 V1 审阅）→ N7 开工自动 W1
         self.run_state("round-decide", "N4", "--round", "1", "--dir", str(self.project))
         # 迭代节点 completed 后需 node-review 落 P2 门禁（下游 N5 开工校验上游门禁）

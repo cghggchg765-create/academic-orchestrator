@@ -241,6 +241,13 @@ def cmd_round_score(args):
     # 维度分工场景：第二审阅者只提交自己负责的维度，不传 --total。
     # 校验：他提交的维度必须都在自己分工范围内，不能越界评别人的维度。
     if is_split_review:
+        # 分工分支同样要过 dims 结构校验：此前只有主分支校验，分工提交
+        # 空 JSON / 数组 / 字符串值 / 越界值都会被原样记进 dimension_contributions。
+        if not isinstance(dims, dict) or not dims:
+            sys.exit("[state_utils] 维度分工提交的 --dims 必须是非空 JSON 对象（键为分工维度名）")
+        for key, value in dims.items():
+            if not isinstance(value, (int, float)) or not math.isfinite(float(value)) or not 0 <= float(value) <= 10:
+                sys.exit(f"[state_utils] 评分维度 {key} 必须是 0 到 10 之间的有限数")
         out_of_scope = set(dims) - split_dims
         if out_of_scope:
             sys.exit(
@@ -307,13 +314,19 @@ def cmd_round_score(args):
                  "result": f"total={total} (pass={profile['pass']})", "node": node})
     if scope_id:
         gate["scope_id"] = scope_id
-    # 达标自动落盘辅助硬门禁（消除 A1/A2 无落盘路径的断链）：N4 达标 → A1；N7 达标 → A2
-    if gate_status == "PASS":
-        aux_gate = {"N4": "A1", "N7": "A2"}.get(node)
-        if aux_gate:
-            aux = state["gates"].setdefault(aux_gate, {"status": "pending"})
-            aux.update({"status": "PASS", "agent": args.judge, "timestamp": now_iso(),
-                        "result": f"round{args.round} total={total} >= pass {profile['pass']}，自动通过（反模式扫描随评分判定）"})
+    # S 门禁变更同样接入哈希链事件流：此前只有 node-review 写的门禁入流，
+    # 事件流对迭代环是盲区——"gate_events.intact" 给审计者半覆盖的假象。
+    try:
+        from state_events import record_gate_change
+        record_gate_change(root, gate=gate_id, from_status="pending",
+                           to_status=gate_status, actor=args.judge,
+                           source_cmd="round-score",
+                           evidence="; ".join(target_round["score"]["evidence"]))
+    except Exception as exc:
+        print(f"[state_utils] ⚠ 门禁事件流记录失败（不影响评分）: {exc}", file=sys.stderr)
+    # （A1/A2 辅助门禁已删除：它们由本处机器写成、判据与 S<n>-<node> 完全同一事实，
+    #  属"同一事实两个名字"的纯重复状态；下游推进查的上游门禁来自 NODES 声明，
+    #  删声明后自动只查 S 门禁。历史项目残留的 A1/A2 键由 upgrade-heal 清理提示。）
     upsert_row_by_first_cell(node_homepage(root, node), "迭代记录", args.round,
                              f"| {args.round} | {target_round.get('branch', '-')} | {total} | - | - |")
     save_round_report(root, node, args.round, "review", {
@@ -364,6 +377,21 @@ def cmd_round_decide(args):
         sys.exit(f"[state_utils] 轮次 {node}/round{args.round} 已有决策，拒绝重复决策")
     if not target_round.get("score"):
         sys.exit("[state_utils] 该轮尚无评分，请先 round-score")
+    # 维度分工完整性提示（不拦截，沿用"缺维度不拦"契约）：主审阅者的整体分
+    # 漏掉分工维度、且分工方也没提交 dimension_contributions 时，这些维度
+    # 实际处于"无人评过"状态——不提示就会带着空维度完成收敛判定。
+    _split = DIMENSION_SPLIT.get(node) or {}
+    if _split:
+        _split_dims = set(_split.get("dimensions") or [])
+        _scored_dims = set((target_round.get("score") or {}).get("dimensions") or {})
+        _contrib_dims = set()
+        for _c in (target_round.get("dimension_contributions") or {}).values():
+            _contrib_dims.update((_c or {}).get("dimensions") or {})
+        _unscored = sorted(_split_dims - _scored_dims - _contrib_dims)
+        if _unscored:
+            print(f"[state_utils] ⚠ {node} 维度分工维度 {_unscored} 既不在整体评分中，"
+                  f"也没有 {_split.get('agent')} 的 dimension_contributions ——"
+                  f"这些维度本轮实际未评分（不参与硬上限判定）", file=sys.stderr)
     profile = state["termination"][PROFILE_OF[node]]
     total = target_round["score"]["total"]
     scored = [r for r in state["rounds"]
@@ -450,6 +478,15 @@ def cmd_round_decide(args):
             if getattr(args, "skip_prereq", False):
                 state.setdefault("meta", {}).setdefault("prereq_skips", []).append(
                     {"at": now_iso(), "node": node, "reason": "round-decide --skip-prereq（测试/迁移）"})
+                # --skip-prereq 只豁免**前置**（未开工/上游/本节点门禁），
+                # 交付物完整性（checkpoint + 真实产物）不受它影响——
+                # 否则一个测试开关就能让空壳轮次标 completed（语义混载，实测发生过）。
+                from state_nodes import require_node_deliverables
+                require_node_deliverables(
+                    root, node,
+                    allow_empty=getattr(args, "allow_empty_artifacts", False),
+                    allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
+                )
             else:
                 from state_guard import require_completion_allowed
                 require_completion_allowed(

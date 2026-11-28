@@ -30,9 +30,10 @@
     # 只输出正文（去掉 frontmatter），适合塞进 prompt
     python scripts/skill_context.py --name mm-self-review --body-only
 
-解析顺序与宿主一致（先命中者胜）：显式根 → ~/.zcode/skills → ~/.agents/skills
-→ ~/.zcode/skill-sources（clone 仓库）→ 项目 .zcode/skills → .agents/skills
-→ 插件缓存。同名多处命中时报告全部候选，避免"改了不生效"。
+解析顺序与宿主一致（先命中者胜）：显式根（MM_SKILL_ROOTS）→ ~/.zcode/skills
+→ ~/.agents/skills → ~/.zcode/skill-sources（clone 仓库）→ ZCODE_PLUGIN_ROOT
+（开发覆盖）→ 项目 .zcode/skills → .agents/skills → 插件缓存（多版本取语义
+版本最高的一份）。同名多处命中时报告全部候选，避免"改了不生效"。
 """
 from __future__ import annotations
 
@@ -51,6 +52,41 @@ PLUGIN_CACHE = HOME / ".zcode" / "cli" / "plugins" / "cache"
 MAX_BODY_CHARS = 120_000  # 单份 skill 正文上限，防止把超大文档塞进 prompt
 
 
+def _version_key(text: str) -> tuple:
+    """版本号排序键：数字段按数值比较，非数字段按字符串比较。
+
+    纯字典序会把 1.10.0 排在 2.0.0 之前（'1' < '2'），插件升级大版本后
+    解析会命中旧缓存副本——必须按语义版本比较。
+    """
+    parts: list[tuple[int, int, str]] = []
+    for tok in re.split(r"[._\-+]", text.strip()):
+        if tok.isdigit():
+            parts.append((0, int(tok), ""))
+        elif tok:
+            parts.append((1, 0, tok.casefold()))
+    return parts
+
+
+def _plugin_cache_roots() -> list[Path]:
+    """插件缓存里的 skills 目录，多版本插件取**语义版本最高**的一份。
+
+    缓存布局 <cache>/<marketplace>/<plugin>/<version>/skills；
+    旧版本目录在升级后可能残留，纯 sorted() 字典序会选到陈旧副本。
+    """
+    if not PLUGIN_CACHE.is_dir():
+        return []
+    best: dict[tuple[str, str], tuple[tuple, Path]] = {}
+    for skills_dir in PLUGIN_CACHE.glob("*/*/*/skills"):
+        # skills_dir = <cache>/<marketplace>/<plugin>/<version>/skills
+        plugin_dir = skills_dir.parent.parent
+        version = skills_dir.parent.name
+        key = (plugin_dir.parent.name.casefold(), plugin_dir.name.casefold())
+        vk = _version_key(version)
+        if key not in best or vk > best[key][0]:
+            best[key] = (vk, skills_dir)
+    return [p for _, p in sorted(best.values(), key=lambda x: str(x[1]))]
+
+
 def _roots(project: Path | None) -> list[Path]:
     out: list[Path] = []
     env_roots = os.environ.get("MM_SKILL_ROOTS") or os.environ.get("PIPELINE_SKILLS_ROOTS")
@@ -62,9 +98,7 @@ def _roots(project: Path | None) -> list[Path]:
         out.append(Path(plugin_root) / "skills")
     if project:
         out.extend([project / ".zcode" / "skills", project / ".agents" / "skills"])
-    if PLUGIN_CACHE.is_dir():
-        # 插件缓存：<cache>/<marketplace>/<plugin>/<version>/skills/<name>
-        out.extend(sorted(PLUGIN_CACHE.glob("*/*/*/skills")))
+    out.extend(_plugin_cache_roots())
     return [r for r in out if r.is_dir()]
 
 

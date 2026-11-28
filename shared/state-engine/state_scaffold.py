@@ -703,7 +703,7 @@ def scaffold(root, competition, force=False, sync_runtime=False, runtime_source=
                                                   "timestamp": None, "result": None}
         else:
             # 找不到注册表时退回内置清单（fail-safe）
-            for gate in ("M1", "D1", "P1", "P2", "A1", "T1", "V1", "B1", "W1", "A2", "W2", "A3"):
+            for gate in ("M1", "D1", "P1", "P2", "T1", "V1", "B1", "W1", "W2", "A3"):
                 decision_log["gates"][gate] = {"status": "pending", "agent": None,
                                                "timestamp": None, "result": None}
             for gate in ("H1", "H2", "H3"):
@@ -1123,7 +1123,7 @@ def _load_gate_registry():
 # 找不到注册表时用它，保证 kind 约束仍然生效（绝不返回空字典）。
 _BUILTIN_GATES = {
     **{g: {"id": g, "kind": "review"} for g in ("M1", "D1", "P1", "P2", "T1", "V1", "B1", "W2", "A3")},
-    **{g: {"id": g, "kind": "auto"} for g in ("A1", "A2", "W1")},
+    **{g: {"id": g, "kind": "auto"} for g in ("W1",)},
     **{g: {"id": g, "kind": "human"} for g in ("H1", "H2", "H3")},
 }
 

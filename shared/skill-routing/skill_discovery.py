@@ -84,11 +84,31 @@ def _plugin_skill_roots() -> list[Path]:
     return found
 
 
+def _version_key(text: str) -> list[tuple[int, int, str]]:
+    """版本号语义排序键：数字段按数值比较，非数字段按字符串比较。
+
+    纯字典序在跨大版本时会错乱（'1' < '2'，1.10.0 反而排在 2.0.0 之外），
+    插件缓存多版本共存时 reverse 字典序可能选到旧副本。
+    """
+    parts: list[tuple[int, int, str]] = []
+    for tok in re.split(r"[._\-+]", text.strip()):
+        if tok.isdigit():
+            parts.append((0, int(tok), ""))
+        elif tok:
+            parts.append((1, 0, tok.casefold()))
+    return parts
+
+
 def _package_dirs(plugin: Path) -> list[Path]:
-    """插件根下的实际包目录（兼容 `<plugin>/<version>/` 与 `<plugin>/` 两种布局）。"""
+    """插件根下的实际包目录（兼容 `<plugin>/<version>/` 与 `<plugin>/` 两种布局）。
+
+    多版本共存时按语义版本从高到低排列——先出现的版本在宿主优先级去重中
+    胜出，必须是最新版而不是字典序恰好靠前的旧版。
+    """
     if (plugin / "skills").is_dir() or _read_manifest(plugin) is not None:
         return [plugin]
-    return sorted((p for p in plugin.iterdir() if p.is_dir()), reverse=True)
+    return sorted((p for p in plugin.iterdir() if p.is_dir()),
+                  key=lambda p: _version_key(p.name), reverse=True)
 
 
 def _read_manifest(pkg: Path) -> dict | None:

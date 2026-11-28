@@ -70,8 +70,19 @@ MIN_COMPARE_LINES = 8
 COPY_SIMILARITY_THRESHOLD = 0.60  # n-gram 重合率超过此值判"疑似复制"
 NGRAM_SIZE = 5                  # 5 行滑窗（比 6 更适配短文件）
 SKIP_SUFFIX = {".png", ".jpg", ".jpeg", ".pdf", ".zip", ".tar", ".gz", ".7z",
-               ".xlsx", ".docx", ".pptx", ".pyc", ".so", ".dll"}
+               ".xlsx", ".docx", ".pptx", ".pyc", ".so", ".dll",
+               # 图像/排版二进制（ResultFigures / ReportPaper 常见）——按文本读只会得到乱码
+               ".gif", ".tif", ".tiff", ".bmp", ".webp", ".ico", ".psd", ".ai",
+               # 数据 / 模型二进制（Code/output 常见）
+               ".npy", ".npz", ".pkl", ".pickle", ".h5", ".hdf5", ".mat", ".sav",
+               ".parquet", ".feather", ".db", ".sqlite", ".sqlite3",
+               ".pt", ".pth", ".ckpt", ".onnx", ".joblib",
+               # 旧版 office 与其余压缩/分发格式
+               ".xls", ".doc", ".ppt", ".rar", ".bz2", ".xz", ".lzma", ".whl", ".egg"}
 SKIP_NAMES = {"readme.md", ".gitkeep", ".readonly"}
+# 单文件读取上限：n-gram 比对只对文本有意义，超大文件几乎必然是二进制/数据转储，
+# 整读进内存会让 scan 崩溃（在门禁里表现为"检测不可用"的假 fail-closed）。
+MAX_SCAN_BYTES = 32 * 1024 * 1024
 
 
 # ---------------------------------------------------------------- 基础工具
@@ -107,8 +118,11 @@ def _normalized_lines(path: Path) -> list[str]:
     """读取并归一化：去空行、去行首尾空白、压多空格、忽略大小写。
 
     归一化是为了让"改几个空格/换行"这种伪原创能被识别出来。
+    超过 MAX_SCAN_BYTES 的文件直接跳过（不比对、不误报）。
     """
     try:
+        if path.stat().st_size > MAX_SCAN_BYTES:
+            return []
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
@@ -349,6 +363,13 @@ def _load_derived(root: Path) -> list[dict]:
 # ---------------------------------------------------------------- 3. 污染检测
 
 def cmd_scan(root: Path, as_json: bool = False, threshold: float = COPY_SIMILARITY_THRESHOLD) -> int:
+    # 阈值必须在 (0, 1]：
+    #   · <=0 会让"重合率 0%"也过线（best 初值 0.0 >= threshold），把所有 ≥8 行产物
+    #     全部误判 HIGH（ref=None, similarity=0.0），门禁等于全拒；
+    #   · >1 则任何重合率都不可能达到，内容复制检测被静默关闭。
+    if not (threshold > 0 and threshold <= 1):
+        print(f"[external] --threshold 必须在 (0, 1] 区间，实际: {threshold}", file=sys.stderr)
+        return 2
     refs = root / REFS_DIR
     ref_lines: dict[str, list[str]] = {}
     # 全部外部文件名（不受行数门槛限制）：位置污染按名字判定，短文件同样要能检出
@@ -364,7 +385,10 @@ def cmd_scan(root: Path, as_json: bool = False, threshold: float = COPY_SIMILARI
                 ref_lines[rel_ref] = lines
 
     derived = _load_derived(root)
-    derived_targets = {d.get("target") for d in derived if d.get("target")}
+    # 登记豁免按 (target, ref) 配对：登记"A 派生出了 T"只豁免 T 与 A 的重合，
+    # 不能让 T 从此对其它未登记的外部文件免疫（路径级豁免等于登记一次、终身全免）。
+    derived_pairs = {(d.get("target"), d.get("ref"))
+                     for d in derived if d.get("target") and d.get("ref")}
 
     findings: list[dict] = []
 
@@ -413,7 +437,7 @@ def cmd_scan(root: Path, as_json: bool = False, threshold: float = COPY_SIMILARI
                     if overlap > best[0]:
                         best = (overlap, ref_rel)
                 if best[0] >= threshold:
-                    registered = rel in derived_targets
+                    registered = (rel, best[1]) in derived_pairs
                     findings.append({
                         "kind": "content_copy", "severity": "HIGH" if not registered else "INFO",
                         "path": rel, "ref": best[1],

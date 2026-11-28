@@ -90,6 +90,25 @@ def collect_findings(root: str):
         return None, None
 
 
+def _refs_has_material(root: str) -> bool:
+    """External/refs/ 里是否存在真实外部资料。
+
+    init 会让 refs/ 自带 README.md、.gitkeep 与空的 papers/ templates/ 子目录——
+    这些是脚手架，不是外部资料。判空必须与 scan 的口径一致（scan 也会跳过它们），
+    否则"零外部资料"的项目在检测器缺失时被误判 fail-closed，
+    违反"无外部资料 → 不检测不报错"的设计。
+    """
+    refs_dir = os.path.join(root, "External", "refs")
+    if not os.path.isdir(refs_dir):
+        return False
+    ignore = {"readme.md", ".gitkeep", ".readonly"}
+    for dirpath, dirnames, filenames in os.walk(refs_dir):
+        for fn in filenames:
+            if fn.lower() not in ignore:
+                return True
+    return False
+
+
 def require_clean_products(root: str, node: str = "", context: str = "收工"):
     """门禁入口：项目引入了外部资料时，自有产物必须通过污染检测。
 
@@ -98,8 +117,7 @@ def require_clean_products(root: str, node: str = "", context: str = "收工"):
     """
     findings, n_external = collect_findings(root)
     if findings is None:
-        refs_dir = os.path.join(root, "External", "refs")
-        if os.path.isdir(refs_dir) and os.listdir(refs_dir):
+        if _refs_has_material(root):
             sys.exit(
                 f"[state_utils] 拒绝{context}：项目引入了外部资料（External/refs/），"
                 f"但污染检测不可用（找不到 external_isolation.py）。\n"

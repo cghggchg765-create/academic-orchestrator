@@ -79,7 +79,7 @@ NODES = {
            "review_mode": "node-review", "phrases": ["选模型", "怎么建模", "建模方案", "公式推导"]},
     "N4": {"dir": "代码", "name": "代码/代码迭代", "executor": "coder", "reviewer": "mm-code-reviewer",
            "skills": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-algorithm-dev", "academic-orchestrator:code-review"],
-           "gates": ["P2", "A1", "H2"], "artifact": "Code/", "stage": "4_solving",
+           "gates": ["P2", "H2"], "artifact": "Code/", "stage": "4_solving",
            "review_mode": "code-score", "phrases": ["写代码", "实现算法", "代码迭代", "修代码", "算法开发"]},
     "N5": {"dir": "调优", "name": "调优", "executor": "tuner", "reviewer": "mm-code-reviewer",
            "skills": ["academic-orchestrator:mm-model-tuning", "academic-orchestrator:mm-iteration-engine"],
@@ -95,7 +95,7 @@ NODES = {
            "secondary_reviewers": ["mm-figure-table-benchmarker"],
            "skills": ["academic-orchestrator:mm-iteration-engine", "academic-orchestrator:mm-latex-writing",
                       "academic-orchestrator:mm-self-review", "academic-orchestrator:figure-table-benchmark"],
-           "gates": ["W1", "A2", "W2", "H3", "B1"], "artifact": "ReportPaper/", "stage": "7_writing",
+           "gates": ["W1", "W2", "H3", "B1"], "artifact": "ReportPaper/", "stage": "7_writing",
            "review_mode": "paper-review", "phrases": ["写论文", "论文初稿", "论文修改", "改论文"]},
     "N8": {"dir": "评审", "name": "评审", "executor": "reviewer", "reviewer": "reviewer",
            "secondary_reviewers": ["mm-figure-table-benchmarker"],
@@ -374,6 +374,21 @@ def reviewer_required_skills(node, agent=None):
     return REVIEWER_SKILLS.get(node, info.get("skills", []))
 
 
+def _version_sort_key(text):
+    """版本号排序键（语义比较）：数字段按数值，非数字段按字符串。
+
+    纯字典序会把 1.10.0 排在 2.0.0 前（'1' < '2'），插件缓存多版本共存时
+    会解析到陈旧副本——这里统一按语义版本比较。
+    """
+    parts = []
+    for tok in re.split(r"[._\-+]", str(text).strip()):
+        if tok.isdigit():
+            parts.append((0, int(tok), ""))
+        elif tok:
+            parts.append((1, 0, tok.casefold()))
+    return parts
+
+
 def skill_is_resolvable(skill, project=None):
     """该 skill 能否在磁盘上找到（与宿主解析顺序一致：先命中者胜）。
 
@@ -398,6 +413,7 @@ def skill_is_resolvable(skill, project=None):
         roots.extend([os.path.join(project, ".zcode", "skills"),
                       os.path.join(project, ".agents", "skills")])
     # 插件缓存：<cache>/<marketplace>/<plugin>/<version>/skills
+    # 同一插件多版本共存时取语义版本最高的副本（字典序会在跨大版本时选到旧版）
     cache = os.path.join(home, ".zcode", "cli", "plugins", "cache")
     if os.path.isdir(cache):
         for market in sorted(os.listdir(cache)):
@@ -408,7 +424,7 @@ def skill_is_resolvable(skill, project=None):
                 pdir = os.path.join(mdir, plugin)
                 if not os.path.isdir(pdir):
                     continue
-                for ver in sorted(os.listdir(pdir)):
+                for ver in sorted(os.listdir(pdir), key=_version_sort_key, reverse=True):
                     sk = os.path.join(pdir, ver, "skills")
                     if os.path.isdir(sk):
                         roots.append(sk)
@@ -877,4 +893,4 @@ def require_mcp_search_evidence(root, node, round_no=None, allow_flag=False):
         f"  或显式传 --allow-missing-mcp 豁免（仅离线/人工特批，须在交付说明中留痕）。"
     )
 
-__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "DIMENSION_SPLIT", "DIMENSION_SPLIT_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_is_resolvable", "skill_basename", "normalized_skill_set", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "require_data_lineage", "DATA_LINEAGE_FILE", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]
+__all__ = ["STATE_DIR", "STATE_FILE", "REGISTRY_FILE", "DASHBOARD_FILE", "CASES_INDEX", "SEARCH_SOURCES_FILE", "TODO_FILE", "NODES", "PROFILE_OF", "REVIEW_GATE", "SECONDARY_REVIEWER_GATE", "SECONDARY_REVIEWER_SKILLS", "DIMENSION_SPLIT", "DIMENSION_SPLIT_SKILLS", "expected_reviewers", "reviewer_required_skills", "UPSTREAM", "SEARCH_SOURCES", "now_iso", "load_json", "save_json_atomic", "save_text_atomic", "sha256_of", "state_path", "load_state", "load_registry", "expected_reviewer", "require_independent_reviewer", "require_review_skills", "skill_is_resolvable", "skill_basename", "normalized_skill_set", "_version_sort_key", "save_state", "node_homepage", "require_node", "verify_problem_lock", "require_git", "git", "git_current_branch", "git_last_commit", "_is_placeholder_row", "_find_section", "append_table_row", "upsert_row_by_first_cell", "update_homepage_meta", "rewrite_homepage_gates", "gate_rows_for", "REPORTS_DIR", "REPORTS_INDEX", "artifact_snapshot", "sha256_of_bytes", "MCP_MANDATORY_NODES", "MCP_CALLS_FILE", "DR_INTERVENTIONS_FILE", "mcp_search_evidence", "require_mcp_search_evidence", "require_data_lineage", "DATA_LINEAGE_FILE", "argparse", "hashlib", "json", "math", "os", "re", "shutil", "subprocess", "sys", "tempfile", "uuid", "datetime", "timezone"]

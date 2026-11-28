@@ -8,34 +8,48 @@ def cmd_node_start(args):
     state = load_state(root)
     node = args.node
 
-    # ---- 注册表一致性校验 ----
+    # ---- 注册表一致性：自愈而非硬退 ----
+    # registry 由 init/project-repair 从 NODES 生成（单一来源），机器消费者只有这里
+    # 与 project-audit。此前"检测到不一致就 sys.exit"的后果：插件升级后 NODES 变化，
+    # 老项目的 registry 副本未重建 → 每次节点开工都被拒——升级即死锁。
+    # 现在自动从 NODES 重建并打印 diff（按单一来源原则 registry 本就不该手改）；
+    # 全量校验仍由 project-audit / upgrade-heal 负责。
     registry = load_registry(root)
     registry_ids = set(registry.keys())
     nodedef_ids = set(k for k in NODES if k != "N0")
-    missing_in_registry = nodedef_ids - registry_ids
-    extra_in_registry = registry_ids - nodedef_ids
-    inconsistencies = []
-    if missing_in_registry:
-        inconsistencies.append(f"registry 缺少节点: {', '.join(sorted(missing_in_registry))}")
-    if extra_in_registry:
-        inconsistencies.append(f"registry 多余节点: {', '.join(sorted(extra_in_registry))}")
-    common = nodedef_ids & registry_ids
-    for nid in common:
-        r_entry = registry[nid]
-        d_entry = NODES[nid]
-        if r_entry.get("executor") != d_entry.get("executor"):
-            inconsistencies.append(f"节点 {nid} executor 不匹配: registry={r_entry.get('executor')}, NODES={d_entry.get('executor')}")
-        if r_entry.get("reviewer") != d_entry.get("reviewer"):
-            inconsistencies.append(f"节点 {nid} reviewer 不匹配: registry={r_entry.get('reviewer')}, NODES={d_entry.get('reviewer')}")
-        if normalized_skill_set(r_entry.get("required_skills", [])) != normalized_skill_set(d_entry.get("skills", [])):
-            inconsistencies.append(f"节点 {nid} skills 不匹配")
-        if sorted(r_entry.get("gates", [])) != sorted(d_entry.get("gates", [])):
-            inconsistencies.append(f"节点 {nid} gates 不匹配")
-        if r_entry.get("artifact_dir") != d_entry.get("artifact"):
-            inconsistencies.append(f"节点 {nid} artifact 不匹配: registry={r_entry.get('artifact_dir')}, NODES={d_entry.get('artifact')}")
-    if inconsistencies:
-        msg = "; ".join(inconsistencies)
-        sys.exit(f"[state_utils] 注册表与 NODES 定义不一致: {msg}")
+    rebuild = set(registry_ids) != nodedef_ids
+    if not rebuild:
+        for nid in nodedef_ids & registry_ids:
+            r_entry, d_entry = registry[nid], NODES[nid]
+            if (r_entry.get("executor") != d_entry.get("executor")
+                    or r_entry.get("reviewer") != d_entry.get("reviewer")
+                    or normalized_skill_set(r_entry.get("required_skills", [])) != normalized_skill_set(d_entry.get("skills", []))
+                    or sorted(r_entry.get("gates", [])) != sorted(d_entry.get("gates", []))
+                    or r_entry.get("artifact_dir") != d_entry.get("artifact")):
+                rebuild = True
+                break
+    if rebuild:
+        # 与 state_scaffold.cmd_init 的生成逻辑同字段同结构（单一来源：NODES）。
+        # 不抽公共函数的原因：scaffold 的生成内联在 cmd_init 里且耦合文件布局，
+        # 这里重建只覆盖 registry 本体，其余 init 产物不动。
+        registry = {"_comment": "调用路由注册表：任务→执行 Agent→审阅 Agent→必读 Skill→门禁→产物。任何委派必须与本表匹配。迭代动态门禁 S<n>-<节点> 未列于此（运行时由 round-score 创建）。",
+                    "version": "1.0", "nodes": []}
+        for nid, info in NODES.items():
+            if nid == "N0":
+                continue
+            entry = {"id": nid, "name": info["name"], "trigger_phrases": info["phrases"],
+                     "executor": info["executor"], "reviewer": info["reviewer"], "review_mode": info["review_mode"],
+                     "required_skills": info["skills"], "gates": info["gates"], "artifact_dir": info["artifact"],
+                     "homepage": f"{STATE_DIR}/nodes/{info['dir']}/dashboard.md",
+                     "upstream": [up for up, _ in UPSTREAM.get(nid, [])]}
+            if info.get("secondary_reviewers"):
+                entry["secondary_reviewers"] = info["secondary_reviewers"]
+            registry["nodes"].append(entry)
+        save_json_atomic(os.path.join(root, REGISTRY_FILE), registry)
+        print(f"[state_utils] ⚠ registry 与当前插件定义不一致，"
+              f"已自动按 NODES 重建（单一来源自愈）。全量校验请跑 project-audit。",
+              file=sys.stderr)
+        registry = load_registry(root)
 
     # ---- 上游前置校验（N0 例外） ----
     if node != "N0":
@@ -129,29 +143,27 @@ def cmd_node_finish(args):
         sys.exit(f"[state_utils] node-finish 必须指定 --agent（执行该节点的 Agent；N0 可省）")
     if executor != NODES[node]["executor"]:
         sys.exit(f"[state_utils] 节点 {node} 由 {NODES[node]['executor']} 执行，实际声明 {executor}（禁止错 Agent 代做）")
-    # 技能声明校验（强制子 Agent 先加载本节点 required_skills；前缀/裸名两种写法等价）
+    # 技能声明校验（单检查点）：manifest.must_load 恒为 NODES.required_skills 的
+    # 超集（state_skills.build_manifest 用并集生成），且 node-start 缺 manifest 时会
+    # 自动生成——因此"声明 ⊇ NODES.skills"是"声明 ⊇ must_load"的严格子集检查，
+    # 单独保留只会让同一失败报两次、两种口径。这里只查 must_load；
+    # manifest 缺失/豁免时回退 NODES.skills，报错口径统一为一份。
     if node != "N0":
         declared = normalized_skill_set((args.skills or "").split(","))
+        manifest_path = os.path.join(root, STATE_DIR, "skill-routing", f"{node}.json")
         required_list = NODES[node].get("skills", [])
+        if not state["nodes"][node].get("skill_routing_waived") and os.path.isfile(manifest_path):
+            with open(manifest_path, encoding="utf-8") as fh:
+                manifest = json.load(fh)
+            required_list = manifest.get("must_load") or required_list
+            hint = f"（清单见 state/skill-routing/{node}.json；若清单已过期请重跑 skill-plan {node} --apply）"
+        else:
+            hint = ""
         missing_keys = normalized_skill_set(required_list) - declared
         if missing_keys:
             missing = [s for s in required_list if skill_basename(s) in missing_keys]
-            sys.exit(f"[state_utils] 执行 Agent 必须声明已加载技能（--skills），缺失: {', '.join(missing)}")
-        # 派发清单门禁：动态选出的专业 skill 也必须实际加载（协调层选择 → 执行层落实）
-        if not state["nodes"][node].get("skill_routing_waived"):
-            manifest_path = os.path.join(root, STATE_DIR, "skill-routing", f"{node}.json")
-            if os.path.isfile(manifest_path):
-                with open(manifest_path, encoding="utf-8") as fh:
-                    manifest = json.load(fh)
-                must = normalized_skill_set(manifest.get("must_load", []))
-                not_loaded = must - declared
-                if not_loaded:
-                    sys.exit(
-                        f"[state_utils] 节点 {node} 未加载派发清单要求的专业 skill: "
-                        f"{', '.join(sorted(not_loaded))}"
-                        f"（清单见 state/skill-routing/{node}.json；"
-                        f"若清单已过期请重跑 skill-plan {node} --apply）"
-                    )
+            sys.exit(f"[state_utils] 执行 Agent 必须声明已加载技能（--skills），"
+                     f"缺失: {', '.join(missing)}{hint}")
     # 迭代节点强制走迭代环：无进行中 round 时禁止直接标 completed
     if node in PROFILE_OF:
         has_round = any(r.get("node") == node and r.get("status") == "in_progress" for r in state["rounds"])
@@ -415,14 +427,30 @@ def require_node_deliverables(root, node, allow_empty=False, allow_no_checkpoint
         return
     if not allow_no_checkpoint:
         ckpt = os.path.join(root, "state", "checkpoints", f"{node}.jsonl")
-        if not (os.path.isfile(ckpt) and os.path.getsize(ckpt) > 0):
-            sys.exit(
-                f"[state_utils] 拒绝：节点 {node} 没有任何进度快照（state/checkpoints/{node}.jsonl）。\n"
-                f"  分阶段归档是硬要求——每个 Phase 结束应落一次快照，中断后才可续跑：\n"
-                f"    python state/state_utils.py checkpoint {node} --phase \"<Phase N>\" "
-                f"--done \"<已完成>\" --pending \"<待完成>\" --artifact <产物>\n"
-                f"  若该节点确实为单步动作，可加 --allow-no-checkpoint 并说明原因。"
-            )
+        has_ckpt = os.path.isfile(ckpt) and os.path.getsize(ckpt) > 0
+        if not has_ckpt:
+            if node in PROFILE_OF:
+                # 迭代节点（N4/N5/N7/N8，多 Phase 长任务）：快照是中断续跑的依据，硬性要求。
+                sys.exit(
+                    f"[state_utils] 拒绝：迭代节点 {node} 没有任何进度快照"
+                    f"（state/checkpoints/{node}.jsonl）。\n"
+                    f"  多 Phase 长任务中断后靠快照续跑：\n"
+                    f"    python state/state_utils.py checkpoint {node} --phase \"<Phase N>\" "
+                    f"--done \"<已完成>\" --pending \"<待完成>\" --artifact <产物>\n"
+                    f"  若该节点确实为单步动作，可加 --allow-no-checkpoint 并说明原因。"
+                )
+            # 短节点（N1/N2/N3/N6，分钟级单步）：强制手跑 checkpoint 是纯仪式——
+            # 中断损失以分钟计，从 node-start 重跑即可。自动合成一条收工快照并提示，
+            # 保持 checkpoint-list 可续跑语义，不再让"忘跑 checkpoint"成为最常见失败。
+            os.makedirs(os.path.dirname(ckpt), exist_ok=True)
+            auto = {"ts": now_iso(), "node": node, "phase": "auto", "attempt": 1,
+                    "done": ["node-finish 收工（短节点自动合成快照）"], "pending": [],
+                    "artifacts": [], "by": NODES[node]["executor"]}
+            append_jsonl = json.dumps(auto, ensure_ascii=False) + "\n"
+            with open(ckpt, "a", encoding="utf-8") as fh:
+                fh.write(append_jsonl)
+            print(f"[state_utils] ℹ 短节点 {node} 未手跑 checkpoint，已自动合成收工快照"
+                  f"（迭代节点仍需手动分 Phase 归档）。", file=sys.stderr)
     if not allow_empty:
         if _count_node_outputs(root, node) == 0:
             sys.exit(

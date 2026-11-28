@@ -135,12 +135,54 @@ class CompletionGuardHappyPathTest(Base):
 class EmptyArtifactTest(Base):
     """空产物不得标完成（防止"什么都没做也算完成"）。"""
 
-    def test_rejects_missing_checkpoint(self):
-        """分阶段归档是硬要求：无快照时 node-finish 被拒（先于产物校验）。"""
+    def test_short_node_auto_synthesizes_checkpoint(self):
+        """短节点（N1/N2/N3/N6）缺快照不再硬拒：自动合成收工快照并提示。
+
+        分级依据：快照的价值是长任务中断续跑——对分钟级短节点是纯仪式
+        （损失以分钟计，从 node-start 重跑即可），强制手跑是"忘跑 checkpoint"
+        这一最常见失败的直接来源。迭代节点（N4/N5/N7/N8）仍硬性要求。
+        """
         self.reach_n2()
         r = self.state("node-finish", "N2", "--agent", "dataprep",
                        "--skills", "mm-data-preprocessing", check=False)
-        self.assertNotEqual(r.returncode, 0)
+        # N2 现在应走到下一层校验（空产物拒绝），而不是先倒在 checkpoint 上
+        self.assertIn("自动合成收工快照", r.stderr)
+        self.assertIn("没有任何实际产出文件", r.stderr)
+        ckpt = self.project / "state" / "checkpoints" / "N2.jsonl"
+        self.assertTrue(ckpt.is_file() and ckpt.stat().st_size > 0,
+                        "应自动落一条合成快照")
+
+    def test_iter_node_still_requires_checkpoint(self):
+        """迭代节点缺快照仍硬拒（走 round-decide 写 completed 的路径）。
+
+        迭代环检查先于快照检查，所以"未开轮直接收工"报的是迭代环错误；
+        快照硬拒的真实路径是 round-decide（迭代节点唯一的 completed 写入方）。
+        """
+        self.reach_n2()
+        doc_path = self.project / "state" / "decision_log.json"
+        doc = json.loads(doc_path.read_text(encoding="utf-8"))
+        doc["nodes"]["N3"]["status"] = "completed"
+        doc["gates"].setdefault("P1", {})["status"] = "PASS"
+        doc_path.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        (self.project / "Code").mkdir(exist_ok=True)
+        (self.project / "Code" / "main.py").write_text("print(1)\n", encoding="utf-8")
+        reports = self.project / "state" / "reports"
+        reports.mkdir(parents=True, exist_ok=True)
+        (reports / "mcp-calls.jsonl").write_text(
+            json.dumps({"node": "N4", "round": 1, "mcp": "context7, github",
+                        "query": "q", "ts": "t", "result": "r", "card": "c"}) + "\n",
+            encoding="utf-8")
+        self.state("round-start", "N4", "--skip-prereq")
+        self.state("round-score", "N4", "--round", "1", "--total", "9",
+                   "--dims", '{"correctness":9,"efficiency":9,"readability":9,'
+                             '"robustness":9,"innovation":9}',
+                   "--judge", "mm-code-reviewer",
+                   "--skills-read", "mm-iteration-engine,mm-algorithm-dev,code-review",
+                   "--evidence", "Code/main.py", "--allow-missing-mcp")
+        # 不带 --allow-no-checkpoint：应倒在快照校验上
+        r = self.state("round-decide", "N4", "--round", "1",
+                       "--skip-prereq", "--allow-empty-artifacts", check=False)
+        self.assertNotEqual(r.returncode, 0, "迭代节点无快照不得标 completed")
         self.assertIn("没有任何进度快照", r.stderr)
 
     def test_rejects_empty_artifacts(self):
