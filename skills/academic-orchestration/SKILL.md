@@ -167,12 +167,20 @@ python scripts/external_isolation.py derive \
 python scripts/external_isolation.py scan --root .
 ```
 
-### 门禁接入
+### 门禁接入（🔴 机器强制，非文档自觉）
 
-- **节点开工前**（`node-start` 之后、派发执行 Agent 之前）必须跑 `scan`；`CONTAMINATED` 时不得继续。
+- **round-score 评分前**：引擎自动跑污染检测（`state_isolation.require_clean_products`），
+  检出 HIGH（未登记的雷同 / 外部文件混进产物区）→ **直接拒绝评分**，报出文件、重合率与两条合规出路
+  （derive 登记 / 重写）。评分等于给产物背书，产物涉嫌照搬时不得评分。
+- **node-finish 收工前**：同样强制（非迭代节点路径）。
+- **检测不可用但有外部资料** → **fail-closed 拒绝**（宁拦勿漏），提示 `init --sync-runtime` 补齐工具。
+- **没引入外部资料**（`External/refs/` 为空）→ 不检测、不报错（不引入无关负担）。
 - **N4/N5 收工前**：`scan` 必须 `CLEAN`，否则 `mm-code-reviewer` 的可读性维度按 ≤5 封顶。
 - **N7/N8 收工前**：`scan` 必须 `CLEAN`，且所有"参考过的外部实现"都要有对应 `derive` 登记。
 - **交付前**（N8）：`External/` 不进 `SubmissionPackage/`；论文里引用外部实现须在参考文献或致谢中标注。
+
+> 取长补短是被鼓励的：`derive` 登记过的雷同是 INFO（合规参考），
+> 门禁拦的只有"不声明的照搬"。
 
 ### 判据口径（防误报）
 
@@ -574,6 +582,8 @@ python scripts/skill_context.py --name code-review --resolve-only
 被选中专业 skill 的内部流程由该 skill 自己定义，编排方**不复述、不替代**（这样 skill 升级不需要改插件）。
 
 🔴 **派发强制**：每次 `task` 调用必须显式指定 `subagent_type=<registry executor>`（N1→selector、N2→dataprep、N3→modeler、N4→coder、N5→tuner、N6→visualization、N7→writing、N8→reviewer、审阅→mm-code-reviewer/mm-viz-reviewer）。**禁止用 general-purpose 代做任何节点产物**；禁止"一次派发写完所有节点/所有章节"——逐节点、逐章节派发，一个派发只交付一个子任务。每个子 Agent 必须加载其 required_skills **与派发清单 must_load** 并声明（node-finish 校验 --agent/--skills/清单）。执行中用 `state_utils.py node-log <节点> --step <小步骤>` 记录进度、`todo add/done` 更新任务清单。
+
+🔴 **派发名用带插件前缀的全名**（`academic-orchestrator:coder` 形式）：裸名（`coder`）虽在本插件无同名冲突时可用，但用户可能装了其它插件且恰好有同名 Agent——裸名被遮蔽后派发的就是别人的 Agent，专业分工静默失效（用户反馈"用的都是通用子 Agent"的成因之一）。全名永远无歧义。派发失败不得回退 general-purpose，必须先确认全名（lint 已检查文档示例名的真实性）。
 
 学术流程：
 ```

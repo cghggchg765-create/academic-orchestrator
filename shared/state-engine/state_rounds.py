@@ -234,6 +234,10 @@ def cmd_round_score(args):
     # 核心节点 MCP 必调：迭代每轮必须重新检索（禁止纯内生输出）——本轮无检索留痕则拒绝评分
     require_mcp_search_evidence(root, node, round_no=args.round,
                                 allow_flag=getattr(args, "allow_missing_mcp", False))
+    # 防照搬门禁：引入了外部资料时，评分前必须通过污染检测
+    # （评分等于给产物背书；产物涉嫌照搬时不得评分）
+    from state_isolation import require_clean_products
+    require_clean_products(root, node=node, context="评分")
     # 维度分工场景：第二审阅者只提交自己负责的维度，不传 --total。
     # 校验：他提交的维度必须都在自己分工范围内，不能越界评别人的维度。
     if is_split_review:

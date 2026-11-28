@@ -617,7 +617,7 @@ python state/state_utils.py sync-plan [--dir .]                                 
 | 9 | SEARCH 不查 search_sources.json 盲目搜索 | 检索低效、案例不可追溯 | 按需求选源 + 登记 source_type/search_query |
 | 10 | 对已初始化项目重复 init | 状态清空 | 幂等保护，--force 才重建 |
 | 11 | 同节点未决策就开新轮 | 轮次错位 | 先 round-score + round-decide |
-| 12 | 用 general-purpose / 主 agent 内联代做节点产物 | 专业分工失效、skill 空转 | 逐节点/逐章节派发专业子 Agent（subagent_type=executor），audit 会查执行者 result.json 证据 |
+| 12 | 用 general-purpose / 主 agent 内联代做节点产物 | 专业分工失效、skill 空转 | 逐节点/逐章节派发专业子 Agent（`subagent_type=academic-orchestrator:<executor 名>`，如 N4→`academic-orchestrator:coder`），audit 会查执行者 result.json 证据 |
 | 13 | 子 Agent 后台运行期间主 agent 顺手写业务产物 | 产物无主、状态与产物时间线矛盾 | 等待纪律：只做 node-log/todo/派发准备 |
 | 14 | 一口气做完再补记小步骤与 to-do | 进度不可见、无法追溯 | 每完成一个动作立即 node-log + todo add/done |
 

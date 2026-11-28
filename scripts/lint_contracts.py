@@ -295,6 +295,45 @@ def check_documented_commands_exist() -> None:
                       f"（仓库根与所在 skill 目录下都没有）")
 
 
+def check_dispatch_agent_names() -> None:
+    """文档里 `subagent_type=<name>` 示例必须是真实存在的 Agent。
+
+    回归动机：用户反馈"调用时用的都是通用子 Agent"。排查发现注册链路完整，
+    但若文档示例写出不存在的名字，主 Agent 派发失败后会回退 general-purpose
+    ——专业分工静默失效。同时把派发示例统一为带插件前缀名
+    （`academic-orchestrator:<name>`），裸名在其它插件装了同名 Agent 时会被遮蔽。
+    """
+    disk_agents = {p.stem for p in (ROOT / "agents").glob("*.md")}
+    pattern = re.compile(r"subagent_type[=(]\s*[\"'`]?([A-Za-z][\w:-]*)")
+    scan = [ROOT / "README.md", ROOT / "能力盘点.md", ROOT / "commands"]
+    scan += [ROOT / "skills", ROOT / "agents", ROOT / "docs"]
+    seen = set()
+    for target in scan:
+        files = [target] if target.is_file() else [
+            p for p in target.rglob("*.md") if ".venv" not in str(p)]
+        for path in files:
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for m in pattern.finditer(text):
+                name = m.group(1)
+                if name in ("general-purpose", "Agent", "Task"):
+                    continue  # 明确的通用/占位示例
+                if name.endswith(":") or "<" in text[m.start():m.end() + 1]:
+                    continue  # academic-orchestrator:<executor 名> 是占位符写法，不是字面名
+                bare = name.split(":", 1)[-1]
+                if bare in disk_agents:
+                    continue
+                key = (str(path), name)
+                if key in seen:
+                    continue
+                seen.add(key)
+                line_no = text[:m.start()].count("\n") + 1
+                rel = path.relative_to(ROOT)
+                error(f"{rel}:{line_no} 派发示例 `subagent_type={name}` 的 Agent 不存在"
+                      f"（agents/ 下没有 {bare}.md）——照抄会派发失败并回退通用 Agent")
+
+
 def check_naming_redlines() -> None:
     """命名红线（回归防护）：状态目录必须为 state；标准文件名不允许下划线或数字前缀。
     只检查"文件名/路径形态"的旧名（带后缀或作为目录段），不检查裸单词，
@@ -813,6 +852,7 @@ def main() -> int:
     check_component_counts()
     check_documented_counts()
     check_documented_commands_exist()
+    check_dispatch_agent_names()
     check_no_big_archives_tracked()
     check_naming_redlines()
     check_plugin_manifest()

@@ -193,6 +193,10 @@ def cmd_node_finish(args):
         allow_empty=getattr(args, "allow_empty_artifacts", False),
         allow_no_checkpoint=getattr(args, "allow_no_checkpoint", False),
     )
+    # 防照搬门禁：引入了外部资料时，收工前必须通过污染检测
+    # （未登记的雷同 / 外部文件混进产物区 → 拒绝）。检测不可用时 fail-closed。
+    from state_isolation import require_clean_products
+    require_clean_products(root, node=node, context="收工")
     if getattr(args, "allow_empty_artifacts", False):
         try:
             from state_events import record_exemption
