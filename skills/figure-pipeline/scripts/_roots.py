@@ -57,7 +57,6 @@ def skill_roots() -> list[Path]:
     roots.append(home / ".agents" / "skills")
     # 上游克隆目录：有些仓库把技能放在 <repo>/skills/<name>/，
     # 用户级入口是指向该子目录的 junction。搜索 cloned repo 根以便 _probe 能下探一层。
-    roots.append(home / ".zcode" / "skill-sources")
 
     cwd = Path.cwd()
     roots.append(cwd / ".zcode" / "skills")

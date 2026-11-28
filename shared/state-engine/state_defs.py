@@ -401,7 +401,6 @@ def skill_is_resolvable(skill, project=None):
     roots = [
         os.path.join(home, ".zcode", "skills"),
         os.path.join(home, ".agents", "skills"),
-        os.path.join(home, ".zcode", "skill-sources"),
     ]
     env_roots = os.environ.get("MM_SKILL_ROOTS")
     if env_roots:

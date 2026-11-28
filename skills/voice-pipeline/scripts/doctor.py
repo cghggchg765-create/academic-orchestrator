@@ -153,7 +153,7 @@ def check_presets(registry: dict, rows: list[dict]) -> None:
 
 def check_skill(item: dict, rows: list[dict]) -> None:
     name = item["name"]
-    # 可移植解析：$SKILLS_ROOT/<name> 在多根下解析（用户级 / 插件内 / 同仓并列 / skill-sources）
+    # 可移植解析：$SKILLS_ROOT/<name> 在多根下解析（用户级 / 插件内 / 同仓并列）
     path = resolve_entry(item.get("path")) or resolve_entry(f"$SKILLS_ROOT/{name}")
     entry = resolve_entry(item.get("entry")) if item.get("entry") else None
     if (entry is None or not entry.exists()) and path is not None:

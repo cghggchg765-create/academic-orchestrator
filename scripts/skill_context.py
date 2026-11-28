@@ -31,7 +31,7 @@
     python scripts/skill_context.py --name mm-self-review --body-only
 
 解析顺序与宿主一致（先命中者胜）：显式根（MM_SKILL_ROOTS）→ ~/.zcode/skills
-→ ~/.agents/skills → ~/.zcode/skill-sources（clone 仓库）→ ZCODE_PLUGIN_ROOT
+→ ~/.agents/skills→ ZCODE_PLUGIN_ROOT
 （开发覆盖）→ 项目 .zcode/skills → .agents/skills → 插件缓存（多版本取语义
 版本最高的一份）。同名多处命中时报告全部候选，避免"改了不生效"。
 """
@@ -46,7 +46,6 @@ from pathlib import Path
 HOME = Path.home()
 ZCODE_SKILLS = HOME / ".zcode" / "skills"
 AGENTS_SKILLS = HOME / ".agents" / "skills"
-SKILL_SOURCES = HOME / ".zcode" / "skill-sources"
 PLUGIN_CACHE = HOME / ".zcode" / "cli" / "plugins" / "cache"
 
 MAX_BODY_CHARS = 120_000  # 单份 skill 正文上限，防止把超大文档塞进 prompt
@@ -92,7 +91,7 @@ def _roots(project: Path | None) -> list[Path]:
     env_roots = os.environ.get("MM_SKILL_ROOTS") or os.environ.get("PIPELINE_SKILLS_ROOTS")
     if env_roots:
         out.extend(Path(p) for p in env_roots.split(os.pathsep) if p.strip())
-    out.extend([ZCODE_SKILLS, AGENTS_SKILLS, SKILL_SOURCES])
+    out.extend([ZCODE_SKILLS, AGENTS_SKILLS])
     plugin_root = os.environ.get("ZCODE_PLUGIN_ROOT")
     if plugin_root:
         out.append(Path(plugin_root) / "skills")

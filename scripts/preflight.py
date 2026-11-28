@@ -41,10 +41,9 @@ ZCODE_SKILLS = HOME / ".zcode" / "skills"
 AGENTS_SKILLS = HOME / ".agents" / "skills"
 # 本机 skill 的第三处落点：clone 下来的仓库镜像（不一定是可加载的 skill 根，
 # 但"装没装"要靠它判断）。与 skills/*-pipeline/scripts/_roots.py 的根清单保持一致。
-SKILL_SOURCES = HOME / ".zcode" / "skill-sources"
 PLUGIN_CACHE = HOME / ".zcode" / "cli" / "plugins" / "cache"
 # 所有可能存放 skill 的根：路径探测一律走这张表，避免各处各写一份而漏查。
-SKILL_ROOTS = (ZCODE_SKILLS, AGENTS_SKILLS, SKILL_SOURCES, REPO / "skills")
+SKILL_ROOTS = (ZCODE_SKILLS, AGENTS_SKILLS, REPO / "skills")
 
 
 def _read_frontmatter(skill_md: Path):
@@ -66,7 +65,7 @@ def _read_frontmatter(skill_md: Path):
 def check_skill_dir(path: Path, skill_name: str | None = None) -> dict:
     """检查一个 skill 目录是否真的能被宿主加载。
 
-    三种真实布局都要认（本机 skill-sources 里就是后两种）：
+    三种真实布局都要认（clone 型仓库常见后两种）：
       · <name>/SKILL.md                     —— 直接可加载的 skill
       · <name>/skills/<name>/SKILL.md       —— clone 下来的单技能仓库（多一层 skills/）
       · <name>/skills/<sub>/SKILL.md ×N     —— clone 下来的 bundle 仓库
